@@ -1,0 +1,226 @@
+"use client";
+
+import { useState } from "react";
+import { User, Bell, Shield, Trash2, Save, Check } from "lucide-react";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
+
+type Section = "profile" | "notifications" | "security" | "data";
+
+export default function SettingsPage() {
+  const [section, setSection] = useState<Section>("profile");
+  const [saved, setSaved] = useState(false);
+  const [notifications, setNotifications] = useState({
+    uploadComplete: true,
+    transcriptionDone: true,
+    summaryReady: true,
+    minutesGenerated: true,
+    zoomImport: false,
+    exportComplete: true,
+  });
+
+  const save = () => {
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+  };
+
+  const nav = [
+    { key: "profile" as Section, icon: User, label: "Profile" },
+    { key: "notifications" as Section, icon: Bell, label: "Notifications" },
+    { key: "security" as Section, icon: Shield, label: "Security & Privacy" },
+    { key: "data" as Section, icon: Trash2, label: "Data & Storage" },
+  ];
+
+  return (
+    <div className="p-6 max-w-5xl mx-auto animate-slide-in">
+      <div className="mb-6">
+        <h2 className="text-xl font-bold text-slate-800">Settings</h2>
+        <p className="text-sm text-slate-500 mt-0.5">Manage your account and preferences</p>
+      </div>
+      <div className="flex gap-6">
+        <aside className="w-48 shrink-0">
+          <nav className="space-y-0.5">
+            {nav.map(({ key, icon: Icon, label }) => (
+              <button
+                key={key}
+                onClick={() => setSection(key)}
+                className={cn(
+                  "w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors",
+                  section === key ? "bg-indigo-50 text-indigo-700 font-medium" : "text-slate-600 hover:bg-slate-100"
+                )}
+              >
+                <Icon size={15} />{label}
+              </button>
+            ))}
+          </nav>
+        </aside>
+
+        <div className="flex-1 space-y-5">
+          {section === "profile" && (
+            <>
+              <Card>
+                <CardHeader><span className="text-sm font-semibold text-slate-800">Personal Information</span></CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex items-center gap-4 pb-4 border-b border-slate-100">
+                    <div className="w-14 h-14 rounded-full bg-indigo-500 flex items-center justify-center text-xl font-bold text-white">JA</div>
+                    <div>
+                      <Button variant="outline" size="sm">Change Photo</Button>
+                      <p className="text-xs text-slate-400 mt-1">JPG or PNG, max 2MB</p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-xs font-medium text-slate-500 mb-1 block">First Name</label>
+                      <Input defaultValue="Jovit" />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-slate-500 mb-1 block">Last Name</label>
+                      <Input defaultValue="Aleria" />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-slate-500 mb-1 block">Email</label>
+                    <Input defaultValue="jaleria@prm3tax.com" type="email" />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-slate-500 mb-1 block">Organization</label>
+                    <Input defaultValue="PRM3 Tax" />
+                  </div>
+                  <Button onClick={save}>
+                    {saved ? <><Check size={14} /> Saved</> : <><Save size={14} /> Save Changes</>}
+                  </Button>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader><span className="text-sm font-semibold text-slate-800">AI Preferences</span></CardHeader>
+                <CardContent className="space-y-4">
+                  <div>
+                    <label className="text-xs font-medium text-slate-500 mb-1 block">Default Summary Type</label>
+                    <select className="h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                      <option>Executive Summary</option>
+                      <option>Bullet Points</option>
+                      <option>Detailed Summary</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-slate-500 mb-1 block">Prepared By (in minutes)</label>
+                    <Input defaultValue="MinuteFlow AI Assistant" />
+                  </div>
+                  <Button onClick={save} variant="outline">
+                    {saved ? <><Check size={14} /> Saved</> : <><Save size={14} /> Save</>}
+                  </Button>
+                </CardContent>
+              </Card>
+            </>
+          )}
+
+          {section === "notifications" && (
+            <Card>
+              <CardHeader><span className="text-sm font-semibold text-slate-800">Notification Preferences</span></CardHeader>
+              <CardContent className="space-y-4">
+                {Object.entries(notifications).map(([key, value]) => {
+                  const labels: Record<string, string> = {
+                    uploadComplete: "Upload Complete",
+                    transcriptionDone: "Transcription Finished",
+                    summaryReady: "AI Summary Ready",
+                    minutesGenerated: "Meeting Minutes Generated",
+                    zoomImport: "Zoom Recording Imported",
+                    exportComplete: "Export Completed",
+                  };
+                  return (
+                    <div key={key} className="flex items-center justify-between py-2 border-b border-slate-50 last:border-0">
+                      <div>
+                        <p className="text-sm font-medium text-slate-700">{labels[key]}</p>
+                        <p className="text-xs text-slate-400">Receive a notification when this event occurs</p>
+                      </div>
+                      <button
+                        onClick={() => setNotifications((n) => ({ ...n, [key]: !value }))}
+                        className={cn("relative w-10 h-5 rounded-full transition-colors", value ? "bg-indigo-600" : "bg-slate-200")}
+                      >
+                        <span className={cn("absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform", value ? "translate-x-5" : "translate-x-0.5")} />
+                      </button>
+                    </div>
+                  );
+                })}
+                <Button onClick={save}>
+                  {saved ? <><Check size={14} /> Saved</> : <><Save size={14} /> Save Preferences</>}
+                </Button>
+              </CardContent>
+            </Card>
+          )}
+
+          {section === "security" && (
+            <Card>
+              <CardHeader><span className="text-sm font-semibold text-slate-800">Security & Privacy</span></CardHeader>
+              <CardContent className="space-y-4">
+                <div className="p-3 bg-emerald-50 rounded-lg border border-emerald-100">
+                  <p className="text-sm font-medium text-emerald-800 flex items-center gap-2">
+                    <Shield size={14} /> All recordings are encrypted at rest and in transit
+                  </p>
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-slate-500 mb-1 block">Change Password</label>
+                  <Input type="password" placeholder="Current password" className="mb-2" />
+                  <Input type="password" placeholder="New password" className="mb-2" />
+                  <Input type="password" placeholder="Confirm new password" />
+                </div>
+                <div className="flex items-center justify-between py-2 border-t border-slate-100">
+                  <div>
+                    <p className="text-sm font-medium text-slate-700">Two-Factor Authentication</p>
+                    <p className="text-xs text-slate-400">Add an extra layer of security</p>
+                  </div>
+                  <Button variant="outline" size="sm">Enable</Button>
+                </div>
+                <div className="flex items-center justify-between py-2 border-t border-slate-100">
+                  <div>
+                    <p className="text-sm font-medium text-slate-700">Audit Logs</p>
+                    <p className="text-xs text-slate-400">View recent account activity</p>
+                  </div>
+                  <Button variant="outline" size="sm">View Logs</Button>
+                </div>
+                <Button onClick={save}>
+                  {saved ? <><Check size={14} /> Saved</> : <><Save size={14} /> Update Password</>}
+                </Button>
+              </CardContent>
+            </Card>
+          )}
+
+          {section === "data" && (
+            <Card>
+              <CardHeader><span className="text-sm font-semibold text-slate-800">Data & Storage</span></CardHeader>
+              <CardContent className="space-y-4">
+                <div className="p-4 bg-slate-50 rounded-lg">
+                  <div className="flex justify-between text-sm mb-2">
+                    <span className="text-slate-600">Storage used</span>
+                    <span className="font-medium text-slate-800">2.4 GB / 10 GB</span>
+                  </div>
+                  <div className="h-2 bg-slate-200 rounded-full overflow-hidden">
+                    <div className="h-full bg-indigo-500 rounded-full" style={{ width: "24%" }} />
+                  </div>
+                </div>
+                <div className="flex items-center justify-between py-2 border-t border-slate-100">
+                  <div>
+                    <p className="text-sm font-medium text-slate-700">Data Retention</p>
+                    <p className="text-xs text-slate-400">Auto-delete meetings older than</p>
+                  </div>
+                  <select className="h-8 rounded-lg border border-slate-200 bg-white px-2 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    <option>Never</option>
+                    <option>1 year</option>
+                    <option>2 years</option>
+                    <option>6 months</option>
+                  </select>
+                </div>
+                <div className="pt-2 border-t border-slate-100">
+                  <Button variant="outline" size="sm" className="text-slate-600 mr-2">Export All Data</Button>
+                  <Button variant="danger" size="sm">Delete All Recordings</Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}

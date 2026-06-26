@@ -1,65 +1,248 @@
-import Image from "next/image";
+"use client";
 
-export default function Home() {
+import Link from "next/link";
+import {
+  Mic, Upload, Clock, Users, TrendingUp, Zap,
+  FileText, CheckSquare, ArrowRight, Play, Calendar,
+  BarChart2, Activity
+} from "lucide-react";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
+import { useMeetingsStore } from "@/store/meetings";
+import { formatRelative, formatDuration } from "@/lib/utils";
+
+export default function Dashboard() {
+  const { meetings } = useMeetingsStore();
+  const completed = meetings.filter((m) => m.status === "completed");
+  const processing = meetings.filter((m) => m.status !== "completed" && m.status !== "failed");
+  const totalSeconds = completed.reduce((acc, m) => acc + m.duration, 0);
+  const avgDuration = completed.length ? Math.round(totalSeconds / completed.length) : 0;
+  const allActionItems = completed.flatMap((m) => m.actionItems ?? []);
+  const openItems = allActionItems.filter((a) => a.status === "open");
+
+  const statusColors: Record<string, string> = {
+    uploading: "warning",
+    transcribing: "info",
+    detecting_speakers: "info",
+    generating_summary: "info",
+    creating_minutes: "info",
+    completed: "success",
+    failed: "danger",
+  };
+
+  const statusLabels: Record<string, string> = {
+    uploading: "Uploading",
+    transcribing: "Transcribing",
+    detecting_speakers: "Detecting Speakers",
+    generating_summary: "Generating Summary",
+    creating_minutes: "Creating Minutes",
+    completed: "Completed",
+    failed: "Failed",
+  };
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+    <div className="p-6 max-w-7xl mx-auto space-y-6 animate-slide-in">
+      {/* Welcome */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-xl font-bold text-slate-800">Good morning, Jovit</h2>
+          <p className="text-sm text-slate-500 mt-0.5">Here&apos;s your meeting overview</p>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+        <div className="flex gap-2">
+          <Link href="/upload">
+            <Button variant="outline" size="md">
+              <Upload size={15} /> Upload Recording
+            </Button>
+          </Link>
+          <Link href="/record">
+            <Button size="md">
+              <Mic size={15} /> Start Recording
+            </Button>
+          </Link>
         </div>
-      </main>
+      </div>
+
+      {/* Stats */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {[
+          { label: "Total Meetings", value: meetings.length, icon: FileText, color: "text-indigo-600", bg: "bg-indigo-50" },
+          { label: "Hours Transcribed", value: `${(totalSeconds / 3600).toFixed(1)}h`, icon: Clock, color: "text-emerald-600", bg: "bg-emerald-50" },
+          { label: "Avg Duration", value: formatDuration(avgDuration), icon: BarChart2, color: "text-amber-600", bg: "bg-amber-50" },
+          { label: "Open Action Items", value: openItems.length, icon: CheckSquare, color: "text-purple-600", bg: "bg-purple-50" },
+        ].map(({ label, value, icon: Icon, color, bg }) => (
+          <Card key={label} className="p-5">
+            <div className="flex items-start justify-between">
+              <div>
+                <p className="text-xs text-slate-500 font-medium">{label}</p>
+                <p className="text-2xl font-bold text-slate-800 mt-1">{value}</p>
+              </div>
+              <div className={`w-9 h-9 rounded-lg ${bg} flex items-center justify-center`}>
+                <Icon size={18} className={color} />
+              </div>
+            </div>
+          </Card>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Recent Meetings */}
+        <div className="lg:col-span-2">
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Activity size={15} className="text-slate-400" />
+                  <span className="font-semibold text-slate-800 text-sm">Recent Meetings</span>
+                </div>
+                <Link href="/meetings">
+                  <Button variant="ghost" size="sm" className="text-xs text-indigo-600">
+                    View all <ArrowRight size={12} />
+                  </Button>
+                </Link>
+              </div>
+            </CardHeader>
+            <CardContent className="p-0">
+              {meetings.slice(0, 5).map((meeting, i) => (
+                <Link key={meeting.id} href={meeting.status === "completed" ? `/meetings/${meeting.id}` : "#"}>
+                  <div className={`flex items-center gap-4 px-5 py-3.5 hover:bg-slate-50 transition-colors ${i !== 0 ? "border-t border-slate-50" : ""}`}>
+                    <div className="w-9 h-9 rounded-lg bg-indigo-100 flex items-center justify-center shrink-0">
+                      <Mic size={15} className="text-indigo-600" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-medium text-slate-800 truncate">{meeting.title}</p>
+                        <Badge variant={statusColors[meeting.status] as "success" | "warning" | "info" | "danger" | "default"}>
+                          {statusLabels[meeting.status]}
+                        </Badge>
+                      </div>
+                      <div className="flex items-center gap-3 mt-0.5">
+                        <span className="text-xs text-slate-400 flex items-center gap-1">
+                          <Calendar size={10} /> {formatRelative(meeting.date)}
+                        </span>
+                        <span className="text-xs text-slate-400 flex items-center gap-1">
+                          <Clock size={10} /> {formatDuration(meeting.duration)}
+                        </span>
+                        <span className="text-xs text-slate-400 flex items-center gap-1">
+                          <Users size={10} /> {meeting.participants.length}
+                        </span>
+                      </div>
+                    </div>
+                    {meeting.status !== "completed" && meeting.processingProgress !== undefined && (
+                      <div className="w-20 shrink-0">
+                        <Progress value={meeting.processingProgress} />
+                        <p className="text-xs text-slate-400 mt-1 text-right">{meeting.processingProgress}%</p>
+                      </div>
+                    )}
+                    {meeting.status === "completed" && (
+                      <ArrowRight size={14} className="text-slate-300 shrink-0" />
+                    )}
+                  </div>
+                </Link>
+              ))}
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Right column */}
+        <div className="space-y-4">
+          {/* Processing Queue */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center gap-2">
+                <Zap size={15} className="text-amber-500" />
+                <span className="font-semibold text-slate-800 text-sm">AI Processing</span>
+                {processing.length > 0 && (
+                  <span className="ml-auto text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-medium">
+                    {processing.length} active
+                  </span>
+                )}
+              </div>
+            </CardHeader>
+            <CardContent className="p-0">
+              {processing.length === 0 ? (
+                <div className="px-5 py-6 text-center text-xs text-slate-400">
+                  No items processing
+                </div>
+              ) : (
+                processing.map((m) => (
+                  <div key={m.id} className="px-5 py-3 border-t border-slate-50 first:border-0">
+                    <p className="text-xs font-medium text-slate-700 truncate">{m.title}</p>
+                    <div className="flex items-center gap-2 mt-2">
+                      <Progress value={m.processingProgress ?? 20} />
+                      <span className="text-xs text-slate-400 shrink-0">{m.processingProgress ?? 20}%</span>
+                    </div>
+                    <p className="text-xs text-slate-400 mt-1 capitalize">{statusLabels[m.status]}…</p>
+                  </div>
+                ))
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Quick Actions */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center gap-2">
+                <TrendingUp size={15} className="text-slate-400" />
+                <span className="font-semibold text-slate-800 text-sm">Quick Actions</span>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              <Link href="/record">
+                <Button variant="outline" size="md" className="w-full justify-start gap-3">
+                  <div className="w-6 h-6 rounded-md bg-red-50 flex items-center justify-center">
+                    <Mic size={12} className="text-red-500" />
+                  </div>
+                  Record New Meeting
+                </Button>
+              </Link>
+              <Link href="/upload">
+                <Button variant="outline" size="md" className="w-full justify-start gap-3">
+                  <div className="w-6 h-6 rounded-md bg-indigo-50 flex items-center justify-center">
+                    <Upload size={12} className="text-indigo-500" />
+                  </div>
+                  Upload Audio File
+                </Button>
+              </Link>
+              <Link href="/integrations">
+                <Button variant="outline" size="md" className="w-full justify-start gap-3">
+                  <div className="w-6 h-6 rounded-md bg-blue-50 flex items-center justify-center">
+                    <Zap size={12} className="text-blue-500" />
+                  </div>
+                  Connect Zoom
+                </Button>
+              </Link>
+            </CardContent>
+          </Card>
+
+          {/* Open Action Items */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <CheckSquare size={15} className="text-slate-400" />
+                  <span className="font-semibold text-slate-800 text-sm">Open Action Items</span>
+                </div>
+                <Badge variant="warning">{openItems.length}</Badge>
+              </div>
+            </CardHeader>
+            <CardContent className="p-0">
+              {openItems.slice(0, 4).map((item) => (
+                <div key={item.id} className="px-5 py-3 border-t border-slate-50 first:border-0">
+                  <p className="text-xs font-medium text-slate-700 line-clamp-2">{item.task}</p>
+                  <div className="flex items-center gap-2 mt-1">
+                    <Badge variant={item.priority === "high" ? "danger" : item.priority === "medium" ? "warning" : "default"} className="text-xs">
+                      {item.priority}
+                    </Badge>
+                    <span className="text-xs text-slate-400">{item.assignee}</span>
+                  </div>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        </div>
+      </div>
     </div>
   );
 }
