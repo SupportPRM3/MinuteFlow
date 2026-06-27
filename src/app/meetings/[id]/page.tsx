@@ -302,23 +302,93 @@ export default function MeetingDetail({ params }: { params: Promise<{ id: string
       addText(`Participants: ${(activeMinutes.participants ?? []).join(", ")}`, 9, false, "#475569");
       y += 3;
 
-      if (activeMinutes.objectives?.length) { addSection("Objectives"); activeMinutes.objectives.forEach((o) => addText(`• ${o}`, 10)); }
-      if (activeMinutes.agenda?.length) { addSection("Agenda"); activeMinutes.agenda.forEach((a) => addText(`• ${a}`, 10)); }
+      const BODY = "#0f172a";
+      const MUTED = "#475569";
+
+      if (activeMinutes.objectives?.length) {
+        addSection("Objectives");
+        activeMinutes.objectives.forEach((o) => addText(`›  ${o}`, 10, false, BODY));
+      }
+      if (activeMinutes.agenda?.length) {
+        addSection("Agenda");
+        activeMinutes.agenda.forEach((a) => addText(`›  ${a}`, 10, false, BODY));
+      }
+
       addSection("Discussion Summary");
-      addText(activeMinutes.discussionSummary || "", 10);
-      if (activeMinutes.decisions?.length) { addSection("Decisions Made"); activeMinutes.decisions.forEach((d) => addText(`• ${d}`, 10)); }
+      addText(activeMinutes.discussionSummary || "", 10, false, BODY);
+
+      if (activeMinutes.decisions?.length) {
+        addSection("Decisions Made");
+        activeMinutes.decisions.forEach((d) => addText(`✓  ${d}`, 10, false, BODY));
+      }
+
       if (activeMinutes.actionItems?.length) {
         addSection("Action Items");
-        activeMinutes.actionItems.forEach((item) => {
-          addText(`• ${item.task}`, 10, true);
-          addText(`  Assignee: ${item.assignee || "—"}  ·  Due: ${item.dueDate || "—"}  ·  Priority: ${item.priority}`, 8.5, false, "#64748b");
+        // Table header row
+        const cols = [92, 40, 28, 22]; // column widths in mm
+        const headers = ["Task", "Assignee", "Due Date", "Priority"];
+        const rowH = 7;
+        if (y + rowH > CONTENT_BOTTOM) newPage();
+        doc.setFillColor(...accentRgb);
+        doc.rect(margin, y - 4.5, maxW, rowH, "F");
+        let cx = margin + 2;
+        headers.forEach((h, i) => {
+          doc.setFont("helvetica", "bold");
+          doc.setFontSize(9);
+          doc.setTextColor(255, 255, 255);
+          doc.text(h, cx, y);
+          cx += cols[i];
         });
+        y += rowH - 1;
+        // Data rows
+        activeMinutes.actionItems.forEach((item, idx) => {
+          const rowLines = Math.max(
+            doc.splitTextToSize(item.task, cols[0] - 4).length,
+            1
+          );
+          const rH = rowLines * 4.5 + 3;
+          if (y + rH > CONTENT_BOTTOM) {
+            newPage();
+            // Re-draw header on new page
+            doc.setFillColor(...accentRgb);
+            doc.rect(margin, y - 4.5, maxW, rowH, "F");
+            let hx = margin + 2;
+            headers.forEach((h, i) => {
+              doc.setFont("helvetica", "bold"); doc.setFontSize(9); doc.setTextColor(255, 255, 255);
+              doc.text(h, hx, y); hx += cols[i];
+            });
+            y += rowH - 1;
+          }
+          if (idx % 2 === 1) { doc.setFillColor(248, 250, 252); doc.rect(margin, y - 4, maxW, rH, "F"); }
+          const cells = [item.task, item.assignee || "—", item.dueDate || "—", item.priority || "—"];
+          let tx = margin + 2;
+          cells.forEach((cell, i) => {
+            doc.setFont("helvetica", i === 0 ? "normal" : "normal");
+            doc.setFontSize(9);
+            doc.setTextColor(15, 23, 42);
+            const wrapped = doc.splitTextToSize(cell, cols[i] - 4);
+            wrapped.forEach((line: string, li: number) => { doc.text(line, tx, y + li * 4.5); });
+            tx += cols[i];
+          });
+          y += rH;
+        });
+        y += 2;
       }
-      if (activeMinutes.risks?.length) { addSection("Risks & Considerations"); activeMinutes.risks.forEach((r) => addText(`• ${r}`, 10)); }
-      if (activeMinutes.followUpItems?.length) { addSection("Follow-up Items"); activeMinutes.followUpItems.forEach((f) => addText(`• ${f}`, 10)); }
-      if (activeMinutes.nextMeeting) { addSection("Next Meeting"); addText(activeMinutes.nextMeeting, 10); }
+
+      if (activeMinutes.risks?.length) {
+        addSection("Risks & Considerations");
+        activeMinutes.risks.forEach((r) => addText(`⚠  ${r}`, 10, false, BODY));
+      }
+      if (activeMinutes.followUpItems?.length) {
+        addSection("Follow-up Items");
+        activeMinutes.followUpItems.forEach((f) => addText(`›  ${f}`, 10, false, BODY));
+      }
+      if (activeMinutes.nextMeeting) {
+        addSection("Next Meeting");
+        addText(activeMinutes.nextMeeting, 10, false, BODY);
+      }
       y += 4;
-      addText(`Prepared by: ${preparedBy}`, 8, false, "#94a3b8");
+      addText(`Prepared by: ${preparedBy}`, 8, false, MUTED);
 
       // Stamp footers on all pages now that we know total page count
       const total = pageNum;
