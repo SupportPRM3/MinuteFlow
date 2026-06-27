@@ -7,6 +7,10 @@ const nextConfig: NextConfig = {
       bodySizeLimit: "200mb",
     },
   },
+  // Tell Vercel's bundler to include the ffmpeg native binary
+  outputFileTracingIncludes: {
+    "/api/transcribe": ["./node_modules/ffmpeg-static/**/*"],
+  },
 };
 
 export default nextConfig;
