@@ -276,6 +276,7 @@ export default function MeetingDetail({ params }: { params: Promise<{ id: string
 
       // Draw page 1 header
       drawHeader();
+      y += 4; // extra gap so large title text doesn't overlap the header rule
 
       // Title block
       addText(activeMinutes.title || "Meeting Minutes", 17, true, "#0f172a", 3);
