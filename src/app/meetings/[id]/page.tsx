@@ -65,6 +65,8 @@ export default function MeetingDetail({ params }: { params: Promise<{ id: string
   const [showEditPanel, setShowEditPanel] = useState(false);
   const [exportingPdf, setExportingPdf] = useState(false);
   const [exportingDocx, setExportingDocx] = useState(false);
+  // Ref always tracks the latest active minutes so export closures never go stale
+  const activeMinutesRef = useRef<MeetingMinutes | null | undefined>(undefined);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -112,6 +114,8 @@ export default function MeetingDetail({ params }: { params: Promise<{ id: string
 
   // Resolve which minutes to show — edited version takes priority
   const activeMinutes = minutesData !== undefined ? minutesData : meeting.minutes;
+  // Keep ref always current so async export handlers never read a stale closure
+  activeMinutesRef.current = activeMinutes;
 
   const handleAIEdit = async () => {
     if (!editRequest.trim() || !activeMinutes) return;
@@ -135,19 +139,20 @@ export default function MeetingDetail({ params }: { params: Promise<{ id: string
   };
 
   const handleExportDocx = async () => {
-    if (!activeMinutes) return;
+    const mins = activeMinutesRef.current;
+    if (!mins) return;
     setExportingDocx(true);
     try {
       const res = await fetch("/api/export/docx", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ minutes: activeMinutes, branding }),
+        body: JSON.stringify({ minutes: mins, branding }),
       });
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `${(activeMinutes.title || "minutes").replace(/[^a-z0-9]/gi, "-").toLowerCase()}.docx`;
+      a.download = `${(mins.title || "minutes").replace(/[^a-z0-9]/gi, "-").toLowerCase()}.docx`;
       a.click();
       URL.revokeObjectURL(url);
     } finally {
@@ -156,7 +161,9 @@ export default function MeetingDetail({ params }: { params: Promise<{ id: string
   };
 
   const handleExportPdf = async () => {
-    if (!activeMinutes) return;
+    const mins = activeMinutesRef.current;
+    if (!mins) return;
+    const activeMinutes = mins;
     setExportingPdf(true);
     try {
       const { jsPDF } = await import("jspdf");
