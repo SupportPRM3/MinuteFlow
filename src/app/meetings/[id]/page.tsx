@@ -562,8 +562,32 @@ export default function MeetingDetail({ params }: { params: Promise<{ id: string
           )}
 
           {activeMinutes ? (
-            <Card>
-              <CardContent className="p-8 space-y-6">
+            /* ── Branded document preview ── */
+            <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+
+              {/* Document Header */}
+              <div className="px-8 pt-6 pb-4">
+                <div className="flex items-center gap-4">
+                  {branding.logoBase64 && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={branding.logoBase64} alt="logo" className="h-12 w-auto object-contain shrink-0" />
+                  )}
+                  {(branding.companyName || branding.tagline) && (
+                    <div>
+                      {branding.companyName && (
+                        <div className="text-lg font-bold" style={{ color: branding.accentColor }}>{branding.companyName}</div>
+                      )}
+                      {branding.tagline && (
+                        <div className="text-xs text-slate-500">{branding.tagline}</div>
+                      )}
+                    </div>
+                  )}
+                </div>
+                <div className="mt-3 h-0.5 w-full" style={{ backgroundColor: branding.accentColor }} />
+              </div>
+
+              {/* Document Body */}
+              <div className="px-8 pb-6 space-y-6">
                 <div className="text-center border-b border-slate-100 pb-6">
                   <h1 className="text-2xl font-bold text-slate-900">{activeMinutes.title}</h1>
                   <div className="flex items-center justify-center gap-6 mt-3 text-sm text-slate-500">
@@ -583,11 +607,11 @@ export default function MeetingDetail({ params }: { params: Promise<{ id: string
                   { title: "Agenda", items: activeMinutes.agenda },
                 ].map(({ title, items }) => items?.length ? (
                   <div key={title}>
-                    <h3 className="text-base font-semibold text-slate-800 mb-2">{title}</h3>
+                    <h3 className="text-base font-semibold pb-1 mb-2 border-b" style={{ color: branding.accentColor, borderColor: branding.accentColor }}>{title}</h3>
                     <ul className="space-y-1">
                       {items.map((item, i) => (
                         <li key={i} className="flex items-start gap-2 text-sm text-slate-700">
-                          <ChevronRight size={14} className="text-indigo-400 mt-0.5 shrink-0" />
+                          <ChevronRight size={14} className="mt-0.5 shrink-0" style={{ color: branding.accentColor }} />
                           {item}
                         </li>
                       ))}
@@ -596,13 +620,13 @@ export default function MeetingDetail({ params }: { params: Promise<{ id: string
                 ) : null)}
 
                 <div>
-                  <h3 className="text-base font-semibold text-slate-800 mb-2">Discussion Summary</h3>
+                  <h3 className="text-base font-semibold pb-1 mb-2 border-b" style={{ color: branding.accentColor, borderColor: branding.accentColor }}>Discussion Summary</h3>
                   <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-line">{activeMinutes.discussionSummary}</p>
                 </div>
 
                 {activeMinutes.decisions?.length ? (
                   <div>
-                    <h3 className="text-base font-semibold text-slate-800 mb-2">Decisions Made</h3>
+                    <h3 className="text-base font-semibold pb-1 mb-2 border-b" style={{ color: branding.accentColor, borderColor: branding.accentColor }}>Decisions Made</h3>
                     <ul className="space-y-2">
                       {activeMinutes.decisions.map((d, i) => (
                         <li key={i} className="flex items-start gap-2 text-sm text-slate-700 bg-emerald-50 rounded-lg px-3 py-2">
@@ -616,28 +640,34 @@ export default function MeetingDetail({ params }: { params: Promise<{ id: string
 
                 {activeMinutes.actionItems?.length ? (
                   <div>
-                    <h3 className="text-base font-semibold text-slate-800 mb-2">Action Items</h3>
-                    <div className="space-y-2">
-                      {activeMinutes.actionItems.map((item) => (
-                        <div key={item.id} className="flex items-start gap-3 text-sm bg-slate-50 rounded-lg px-3 py-2">
-                          <CheckSquare size={14} className="text-indigo-400 mt-0.5 shrink-0" />
-                          <div className="flex-1">
-                            <span className="font-medium text-slate-800">{item.task}</span>
-                            <div className="flex gap-2 mt-1">
-                              <Badge variant="outline">{item.assignee}</Badge>
-                              {item.dueDate && <Badge variant="warning">Due {item.dueDate}</Badge>}
-                              <Badge variant={item.priority === "high" ? "danger" : "default"}>{item.priority}</Badge>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
+                    <h3 className="text-base font-semibold pb-1 mb-2 border-b" style={{ color: branding.accentColor, borderColor: branding.accentColor }}>Action Items</h3>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm border-collapse">
+                        <thead>
+                          <tr style={{ backgroundColor: branding.accentColor }}>
+                            {["Task", "Assignee", "Due Date", "Priority"].map((h) => (
+                              <th key={h} className="text-left px-3 py-2 text-white font-semibold text-xs">{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {activeMinutes.actionItems.map((item, i) => (
+                            <tr key={item.id} className={i % 2 === 0 ? "bg-white" : "bg-slate-50"}>
+                              <td className="px-3 py-2 text-slate-800">{item.task}</td>
+                              <td className="px-3 py-2 text-slate-600">{item.assignee || "—"}</td>
+                              <td className="px-3 py-2 text-slate-600">{item.dueDate || "—"}</td>
+                              <td className="px-3 py-2 text-slate-600 capitalize">{item.priority || "—"}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
                     </div>
                   </div>
                 ) : null}
 
                 {activeMinutes.risks?.length ? (
                   <div>
-                    <h3 className="text-base font-semibold text-slate-800 mb-2">Risks</h3>
+                    <h3 className="text-base font-semibold pb-1 mb-2 border-b" style={{ color: branding.accentColor, borderColor: branding.accentColor }}>Risks &amp; Considerations</h3>
                     <ul className="space-y-1">
                       {activeMinutes.risks.map((r, i) => (
                         <li key={i} className="flex items-start gap-2 text-sm text-slate-700">
@@ -650,7 +680,7 @@ export default function MeetingDetail({ params }: { params: Promise<{ id: string
 
                 {activeMinutes.followUpItems?.length ? (
                   <div>
-                    <h3 className="text-base font-semibold text-slate-800 mb-2">Follow-up Items</h3>
+                    <h3 className="text-base font-semibold pb-1 mb-2 border-b" style={{ color: branding.accentColor, borderColor: branding.accentColor }}>Follow-up Items</h3>
                     <ul className="space-y-1">
                       {activeMinutes.followUpItems.map((f, i) => (
                         <li key={i} className="flex items-start gap-2 text-sm text-slate-700">
@@ -662,13 +692,27 @@ export default function MeetingDetail({ params }: { params: Promise<{ id: string
                 ) : null}
 
                 {activeMinutes.nextMeeting && (
-                  <div className="border-t border-slate-100 pt-4 text-sm text-slate-500">
-                    <strong>Next Meeting:</strong> {activeMinutes.nextMeeting}
+                  <div>
+                    <h3 className="text-base font-semibold pb-1 mb-2 border-b" style={{ color: branding.accentColor, borderColor: branding.accentColor }}>Next Meeting</h3>
+                    <p className="text-sm text-slate-700">{activeMinutes.nextMeeting}</p>
                   </div>
                 )}
-                <div className="text-xs text-slate-400">Prepared by: {activeMinutes.preparedBy}</div>
-              </CardContent>
-            </Card>
+              </div>
+
+              {/* Document Footer */}
+              <div className="px-8 py-4 border-t border-slate-100">
+                <div className="h-px w-full bg-slate-200 mb-3" />
+                <div className="flex items-center justify-between text-xs text-slate-400">
+                  <span>{branding.footerNote || "Confidential – for internal use only"}</span>
+                  <span className="flex gap-3">
+                    {branding.website && <span>{branding.website}</span>}
+                    {branding.email && <span>{branding.email}</span>}
+                    {branding.phone && <span>{branding.phone}</span>}
+                    {branding.preparedBy && <span>Prepared by: {branding.preparedBy}</span>}
+                  </span>
+                </div>
+              </div>
+            </div>
           ) : (
             <Card>
               <CardContent className="p-12 text-center text-slate-400 text-sm">
