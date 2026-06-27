@@ -15,6 +15,7 @@ export default function SettingsPage() {
   const [saved, setSaved] = useState(false);
   const { branding, setBranding } = useBrandingStore();
   const logoInputRef = useRef<HTMLInputElement>(null);
+  const [hexInput, setHexInput] = useState(branding.accentColor.replace("#", ""));
   const [notifications, setNotifications] = useState({
     uploadComplete: true,
     transcriptionDone: true,
@@ -242,7 +243,7 @@ export default function SettingsPage() {
                       <button
                         key={c}
                         title={c}
-                        onClick={() => setBranding({ accentColor: c })}
+                        onClick={() => { setBranding({ accentColor: c }); setHexInput(c.replace("#", "").toUpperCase()); }}
                         className={cn("w-8 h-8 rounded-full border-2 transition-transform hover:scale-110 shrink-0",
                           branding.accentColor === c ? "border-slate-700 scale-110 ring-2 ring-offset-1 ring-slate-400" : "border-white shadow-sm")}
                         style={{ backgroundColor: c }}
@@ -262,19 +263,16 @@ export default function SettingsPage() {
                       <span className="text-slate-400 text-sm font-mono select-none">#</span>
                       <input
                         type="text"
-                        value={branding.accentColor.replace("#", "")}
+                        value={hexInput}
                         maxLength={6}
                         spellCheck={false}
                         onChange={(e) => {
                           const val = e.target.value.replace(/[^0-9a-fA-F]/g, "").toUpperCase();
-                          setBranding({ accentColor: val.length === 6 ? `#${val}` : branding.accentColor });
-                          // Keep input showing what the user is typing even mid-edit
-                          e.target.value = val;
-                        }}
-                        onBlur={(e) => {
-                          const val = e.target.value.replace(/[^0-9a-fA-F]/g, "");
+                          setHexInput(val);
                           if (val.length === 6) setBranding({ accentColor: `#${val}` });
-                          else e.target.value = branding.accentColor.replace("#", "");
+                        }}
+                        onBlur={() => {
+                          if (hexInput.length !== 6) setHexInput(branding.accentColor.replace("#", "").toUpperCase());
                         }}
                         className="w-24 bg-transparent text-sm font-mono text-slate-800 focus:outline-none uppercase tracking-widest"
                         placeholder="6366F1"
