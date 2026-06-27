@@ -304,6 +304,47 @@ export default function MeetingDetail({ params }: { params: Promise<{ id: string
 
       const BODY = "#0f172a";
       const MUTED = "#475569";
+      const LINE_H = 4.5; // mm per line at 10pt
+
+      // Helper: render a pill-row (like bg-emerald-50 decision items)
+      const addPillRow = (text: string, prefixSymbol: string, bgRgb: [number,number,number], prefixRgb: [number,number,number]) => {
+        doc.setFontSize(10);
+        doc.setFont("helvetica", "normal");
+        const textX = margin + 8;
+        const wrapped: string[] = doc.splitTextToSize(text, maxW - 10);
+        const rH = wrapped.length * LINE_H + 4;
+        if (y + rH > CONTENT_BOTTOM) {
+          newPage();
+          doc.setFontSize(10);
+          doc.setFont("helvetica", "normal");
+        }
+        doc.setFillColor(...bgRgb);
+        doc.rect(margin, y - 3.5, maxW, rH, "F");
+        doc.setTextColor(...prefixRgb);
+        doc.text(prefixSymbol, margin + 2, y);
+        doc.setTextColor(15, 23, 42);
+        wrapped.forEach((line: string, i: number) => doc.text(line, textX, y + i * LINE_H));
+        y += rH + 1.5;
+      };
+
+      // Helper: draw the action items table header
+      const TABLE_COLS = [88, 40, 28, 18] as const;
+      const TABLE_HEADS = ["Task", "Assignee", "Due Date", "Priority"];
+      const TABLE_ROW_H = 7;
+      const drawTableHeader = () => {
+        if (y + TABLE_ROW_H > CONTENT_BOTTOM) newPage();
+        doc.setFillColor(...accentRgb);
+        doc.rect(margin, y - 5, maxW, TABLE_ROW_H, "F");
+        let cx = margin + 2;
+        TABLE_HEADS.forEach((h, i) => {
+          doc.setFont("helvetica", "bold");
+          doc.setFontSize(9);
+          doc.setTextColor(255, 255, 255);
+          doc.text(h, cx, y);
+          cx += TABLE_COLS[i];
+        });
+        y += TABLE_ROW_H - 2;
+      };
 
       if (activeMinutes.objectives?.length) {
         addSection("Objectives");
@@ -319,65 +360,45 @@ export default function MeetingDetail({ params }: { params: Promise<{ id: string
 
       if (activeMinutes.decisions?.length) {
         addSection("Decisions Made");
-        activeMinutes.decisions.forEach((d) => addText(`✓  ${d}`, 10, false, BODY));
+        activeMinutes.decisions.forEach((d) =>
+          addPillRow(d, "✓", [236, 253, 245], [16, 185, 129])
+        );
       }
 
       if (activeMinutes.actionItems?.length) {
         addSection("Action Items");
-        // Table header row
-        const cols = [92, 40, 28, 22]; // column widths in mm
-        const headers = ["Task", "Assignee", "Due Date", "Priority"];
-        const rowH = 7;
-        if (y + rowH > CONTENT_BOTTOM) newPage();
-        doc.setFillColor(...accentRgb);
-        doc.rect(margin, y - 4.5, maxW, rowH, "F");
-        let cx = margin + 2;
-        headers.forEach((h, i) => {
-          doc.setFont("helvetica", "bold");
-          doc.setFontSize(9);
-          doc.setTextColor(255, 255, 255);
-          doc.text(h, cx, y);
-          cx += cols[i];
-        });
-        y += rowH - 1;
-        // Data rows
+        drawTableHeader();
         activeMinutes.actionItems.forEach((item, idx) => {
-          const rowLines = Math.max(
-            doc.splitTextToSize(item.task, cols[0] - 4).length,
-            1
-          );
-          const rH = rowLines * 4.5 + 3;
+          const cells = [item.task, item.assignee || "—", item.dueDate || "—", item.priority || "—"];
+          const wrappedTask: string[] = doc.splitTextToSize(cells[0], TABLE_COLS[0] - 4);
+          const rH = Math.max(wrappedTask.length, 1) * LINE_H + 3;
           if (y + rH > CONTENT_BOTTOM) {
             newPage();
-            // Re-draw header on new page
-            doc.setFillColor(...accentRgb);
-            doc.rect(margin, y - 4.5, maxW, rowH, "F");
-            let hx = margin + 2;
-            headers.forEach((h, i) => {
-              doc.setFont("helvetica", "bold"); doc.setFontSize(9); doc.setTextColor(255, 255, 255);
-              doc.text(h, hx, y); hx += cols[i];
-            });
-            y += rowH - 1;
+            drawTableHeader();
           }
-          if (idx % 2 === 1) { doc.setFillColor(248, 250, 252); doc.rect(margin, y - 4, maxW, rH, "F"); }
-          const cells = [item.task, item.assignee || "—", item.dueDate || "—", item.priority || "—"];
+          if (idx % 2 === 1) {
+            doc.setFillColor(248, 250, 252);
+            doc.rect(margin, y - 3.5, maxW, rH, "F");
+          }
           let tx = margin + 2;
-          cells.forEach((cell, i) => {
-            doc.setFont("helvetica", i === 0 ? "normal" : "normal");
+          cells.forEach((cell, ci) => {
+            doc.setFont("helvetica", "normal");
             doc.setFontSize(9);
             doc.setTextColor(15, 23, 42);
-            const wrapped = doc.splitTextToSize(cell, cols[i] - 4);
-            wrapped.forEach((line: string, li: number) => { doc.text(line, tx, y + li * 4.5); });
-            tx += cols[i];
+            const lines: string[] = ci === 0 ? wrappedTask : [cell];
+            lines.forEach((line: string, li: number) => doc.text(line, tx, y + li * LINE_H));
+            tx += TABLE_COLS[ci];
           });
-          y += rH;
+          y += rH + 1;
         });
         y += 2;
       }
 
       if (activeMinutes.risks?.length) {
         addSection("Risks & Considerations");
-        activeMinutes.risks.forEach((r) => addText(`⚠  ${r}`, 10, false, BODY));
+        activeMinutes.risks.forEach((r) =>
+          addPillRow(r, "!", [255, 251, 235], [217, 119, 6])
+        );
       }
       if (activeMinutes.followUpItems?.length) {
         addSection("Follow-up Items");
