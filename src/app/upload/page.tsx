@@ -16,13 +16,14 @@ import Link from "next/link";
 const ACCEPTED = ".mp3,.wav,.m4a,.aac,.mp4,.mov,.mpeg";
 const AUDIO_EXTS = ["mp3", "wav", "m4a", "aac", "mpeg"];
 
-const STAGES = [
-  { label: "Uploading audio", pct: 15 },
-  { label: "Transcribing with Whisper AI", pct: 60 },
-  { label: "Detecting speakers", pct: 75 },
-  { label: "Generating AI summaries", pct: 88 },
-  { label: "Creating meeting minutes", pct: 100 },
-];
+// Mirrors the stages emitted by the SSE API
+const STAGE_LABELS: Record<string, string> = {
+  compressing:  "Compressing audio",
+  transcribing: "Transcribing with Whisper AI",
+  analyzing:    "Analyzing with Claude AI",
+  finalizing:   "Creating meeting minutes",
+};
+const STAGE_ORDER = ["compressing", "transcribing", "analyzing", "finalizing"];
 
 export default function UploadPage() {
   const { addMeeting } = useMeetingsStore();
@@ -30,7 +31,8 @@ export default function UploadPage() {
   const [title, setTitle] = useState("");
   const [dragging, setDragging] = useState(false);
   const [processing, setProcessing] = useState(false);
-  const [stageIndex, setStageIndex] = useState(-1);
+  const [currentStage, setCurrentStage] = useState<string>("");
+  const [stageMessage, setStageMessage] = useState<string>("");
   const [progress, setProgress] = useState(0);
   const [done, setDone] = useState(false);
   const [createdId, setCreatedId] = useState<string | null>(null);
@@ -50,70 +52,85 @@ export default function UploadPage() {
     if (f) handleFile(f);
   }, []);
 
-  const animateToStage = async (idx: number) => {
-    setStageIndex(idx);
-    const targetPct = STAGES[idx].pct;
-    const prevPct = idx === 0 ? 0 : STAGES[idx - 1].pct;
-    for (let p = prevPct; p <= targetPct; p += 2) {
-      setProgress(p);
-      await new Promise((r) => setTimeout(r, 60));
-    }
-  };
-
   const processFile = async () => {
     if (!file) return;
     setProcessing(true);
     setError(null);
+    setProgress(5);
+    setCurrentStage("compressing");
+    setStageMessage("Uploading recording…");
 
     try {
-      await animateToStage(0); // Uploading
-
       const formData = new FormData();
       formData.append("file", file);
 
-      await animateToStage(1); // Transcribing
       const res = await fetch("/api/transcribe", { method: "POST", body: formData });
+      if (!res.body) throw new Error("No response stream");
 
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error ?? "Transcription failed");
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let finalData: Record<string, unknown> | null = null;
+
+      while (true) {
+        const { done: streamDone, value } = await reader.read();
+        if (streamDone) break;
+        buffer += decoder.decode(value, { stream: true });
+
+        // Parse SSE messages — each message is separated by double newline
+        const parts = buffer.split("\n\n");
+        buffer = parts.pop() ?? "";
+
+        for (const part of parts) {
+          const eventLine = part.match(/^event: (.+)$/m)?.[1];
+          const dataLine = part.match(/^data: (.+)$/m)?.[1];
+          if (!eventLine || !dataLine) continue;
+
+          const payload = JSON.parse(dataLine);
+
+          if (eventLine === "progress") {
+            setCurrentStage(payload.stage);
+            setStageMessage(payload.message);
+            setProgress(payload.pct);
+          } else if (eventLine === "done") {
+            setProgress(100);
+            finalData = payload;
+          } else if (eventLine === "error") {
+            throw new Error(payload.message);
+          }
+        }
       }
 
-      await animateToStage(2); // Detecting speakers
-      await animateToStage(3); // Summaries
-      await animateToStage(4); // Minutes
-
-      const data = await res.json();
+      if (!finalData) throw new Error("Processing failed — no data received.");
 
       const id = `upload-${Date.now()}`;
       const newMeeting: Meeting = {
         id,
-        title: title || data.title || file.name,
+        title: title || (finalData.title as string) || file.name,
         date: new Date().toISOString(),
-        duration: data.transcript?.length
-          ? data.transcript[data.transcript.length - 1].endTime
+        duration: Array.isArray(finalData.transcript) && finalData.transcript.length
+          ? (finalData.transcript[finalData.transcript.length - 1] as { endTime: number }).endTime
           : 3600,
-        participants: data.participants ?? ["Speaker 1"],
+        participants: (finalData.participants as string[]) ?? ["Speaker 1"],
         status: "completed",
         tags: ["uploaded"],
         isFavorite: false,
         createdBy: "Jovit Aleria",
-        transcript: data.transcript,
-        speakers: data.speakers,
-        summaries: data.summaries,
-        actionItems: data.actionItems ?? [],
-        minutes: data.minutes,
+        transcript: finalData.transcript as Meeting["transcript"],
+        speakers: finalData.speakers as Meeting["speakers"],
+        summaries: finalData.summaries as Meeting["summaries"],
+        actionItems: (finalData.actionItems as Meeting["actionItems"]) ?? [],
+        minutes: finalData.minutes as Meeting["minutes"],
       };
 
       addMeeting(newMeeting);
-      // Save the original audio file to IndexedDB so it can be played back later
       await saveRecording(id, file).catch(() => {});
       setCreatedId(id);
       setDone(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Processing failed. Please try again.");
       setProcessing(false);
-      setStageIndex(-1);
+      setCurrentStage("");
       setProgress(0);
     }
   };
@@ -131,7 +148,7 @@ export default function UploadPage() {
         <p className="text-sm text-slate-500 mb-6">Transcript, AI summaries, and meeting minutes are ready.</p>
         <div className="flex gap-3 justify-center">
           {createdId && <Link href={`/meetings/${createdId}`}><Button>View Meeting <ArrowRight size={14} /></Button></Link>}
-          <Button variant="outline" onClick={() => { setFile(null); setTitle(""); setDone(false); setStageIndex(-1); setProgress(0); }}>Upload Another</Button>
+          <Button variant="outline" onClick={() => { setFile(null); setTitle(""); setDone(false); setCurrentStage(""); setProgress(0); }}>Upload Another</Button>
         </div>
       </Card>
     </div>
@@ -145,26 +162,40 @@ export default function UploadPage() {
             <Loader size={28} className="text-indigo-500 animate-spin" />
           </div>
           <h3 className="text-lg font-bold text-slate-800">Processing {file?.name}</h3>
-          <p className="text-sm text-slate-500 mt-1">AI is transcribing and generating your meeting minutes…</p>
+          <p className="text-sm text-slate-500 mt-1">{stageMessage || "Preparing…"}</p>
         </div>
         <div className="mb-6">
           <Progress value={progress} />
           <p className="text-xs text-slate-400 text-right mt-1">{progress}%</p>
         </div>
         <div className="space-y-3">
-          {STAGES.map((s, i) => (
-            <div key={s.label} className="flex items-center gap-3">
-              <div className={cn(
-                "w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium shrink-0",
-                i < stageIndex ? "bg-emerald-500 text-white" :
-                i === stageIndex ? "bg-indigo-500 text-white" :
-                "bg-slate-100 text-slate-400"
-              )}>
-                {i < stageIndex ? "✓" : i + 1}
+          {STAGE_ORDER.map((stage, i) => {
+            const currentIdx = STAGE_ORDER.indexOf(currentStage);
+            const isDone = i < currentIdx;
+            const isActive = stage === currentStage;
+            return (
+              <div key={stage} className="flex items-center gap-3">
+                <div className={cn(
+                  "w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium shrink-0 transition-colors",
+                  isDone   ? "bg-emerald-500 text-white" :
+                  isActive ? "bg-indigo-500 text-white" :
+                             "bg-slate-100 text-slate-400"
+                )}>
+                  {isDone ? "✓" : i + 1}
+                </div>
+                <span className={cn("text-sm transition-colors", (isDone || isActive) ? "text-slate-800 font-medium" : "text-slate-400")}>
+                  {STAGE_LABELS[stage]}
+                </span>
+                {isActive && (
+                  <span className="flex gap-0.5 ml-1">
+                    <span className="w-1 h-1 bg-indigo-400 rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
+                    <span className="w-1 h-1 bg-indigo-400 rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
+                    <span className="w-1 h-1 bg-indigo-400 rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
+                  </span>
+                )}
               </div>
-              <span className={cn("text-sm", i <= stageIndex ? "text-slate-800 font-medium" : "text-slate-400")}>{s.label}</span>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </Card>
     </div>
@@ -211,7 +242,7 @@ export default function UploadPage() {
             </div>
             <p className="font-semibold text-slate-700 mb-1">Drop your recording here</p>
             <p className="text-sm text-slate-400">or click to browse</p>
-            <p className="text-xs text-slate-300 mt-3">MP3, WAV, M4A, AAC, MP4, MOV, MPEG · Up to 25 MB (Whisper limit)</p>
+            <p className="text-xs text-slate-300 mt-3">MP3, WAV, M4A, AAC, MP4, MOV, MPEG</p>
           </>
         )}
       </div>
