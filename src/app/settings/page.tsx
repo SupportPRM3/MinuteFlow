@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef } from "react";
-import { User, Bell, Shield, Trash2, Save, Check, Palette, Upload, X, Pipette } from "lucide-react";
+import { User, Bell, Shield, Trash2, Save, Check, Palette, Upload, X } from "lucide-react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,7 +15,6 @@ export default function SettingsPage() {
   const [saved, setSaved] = useState(false);
   const { branding, setBranding } = useBrandingStore();
   const logoInputRef = useRef<HTMLInputElement>(null);
-  const colorInputRef = useRef<HTMLInputElement>(null);
   const [notifications, setNotifications] = useState({
     uploadComplete: true,
     transcriptionDone: true,
@@ -251,51 +250,37 @@ export default function SettingsPage() {
                     ))}
                   </div>
 
-                  {/* Custom color picker row */}
+                  {/* Hex input row */}
                   <div className="flex items-center gap-3">
-                    {/* Hidden native input — triggered by button ref click */}
-                    <input
-                      ref={colorInputRef}
-                      type="color"
-                      value={branding.accentColor}
-                      onChange={(e) => setBranding({ accentColor: e.target.value })}
-                      className="sr-only"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => colorInputRef.current?.click()}
-                      title="Open color picker"
-                      className="w-10 h-10 rounded-xl border-2 border-slate-200 shadow-sm flex items-center justify-center hover:scale-105 transition-transform"
+                    {/* Color preview swatch */}
+                    <div
+                      className="w-10 h-10 rounded-xl border border-slate-200 shadow-sm shrink-0"
                       style={{ backgroundColor: branding.accentColor }}
-                    >
-                      <Pipette size={14} className="text-white drop-shadow" />
-                    </button>
-
-                    {/* Hex text input */}
-                    <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
-                      <span className="text-slate-400 text-sm font-mono">#</span>
+                    />
+                    {/* Editable hex field */}
+                    <div className="flex items-center gap-1 bg-white border border-slate-300 rounded-lg px-3 py-2 focus-within:ring-2 focus-within:ring-indigo-400">
+                      <span className="text-slate-400 text-sm font-mono select-none">#</span>
                       <input
                         type="text"
                         value={branding.accentColor.replace("#", "")}
                         maxLength={6}
+                        spellCheck={false}
                         onChange={(e) => {
+                          const val = e.target.value.replace(/[^0-9a-fA-F]/g, "").toUpperCase();
+                          setBranding({ accentColor: val.length === 6 ? `#${val}` : branding.accentColor });
+                          // Keep input showing what the user is typing even mid-edit
+                          e.target.value = val;
+                        }}
+                        onBlur={(e) => {
                           const val = e.target.value.replace(/[^0-9a-fA-F]/g, "");
                           if (val.length === 6) setBranding({ accentColor: `#${val}` });
+                          else e.target.value = branding.accentColor.replace("#", "");
                         }}
-                        className="w-20 bg-transparent text-sm font-mono text-slate-700 focus:outline-none uppercase"
-                        placeholder="6366f1"
+                        className="w-24 bg-transparent text-sm font-mono text-slate-800 focus:outline-none uppercase tracking-widest"
+                        placeholder="6366F1"
                       />
                     </div>
-
-                    {/* Preview chip */}
-                    <div
-                      className="flex items-center gap-2 px-3 py-1.5 rounded-full text-white text-xs font-medium shadow-sm"
-                      style={{ backgroundColor: branding.accentColor }}
-                    >
-                      <span>Preview</span>
-                    </div>
-
-                    <p className="text-xs text-slate-400 ml-1">Click the square to open the color picker</p>
+                    <p className="text-xs text-slate-400">Type any hex color code, e.g. <span className="font-mono">003087</span></p>
                   </div>
                 </CardContent>
               </Card>
