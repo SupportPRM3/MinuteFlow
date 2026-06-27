@@ -72,6 +72,12 @@ export default function MeetingDetail({ params }: { params: Promise<{ id: string
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [chatMessages]);
 
+  // Keep ref current before any early return so export handlers never use a stale closure
+  const activeMinutesEarly = minutesData !== undefined ? minutesData : meeting?.minutes;
+  useEffect(() => {
+    activeMinutesRef.current = activeMinutesEarly;
+  });
+
   if (!meeting) return (
     <div className="p-8 text-center">
       <p className="text-slate-500">Meeting not found.</p>
@@ -114,8 +120,6 @@ export default function MeetingDetail({ params }: { params: Promise<{ id: string
 
   // Resolve which minutes to show — edited version takes priority
   const activeMinutes = minutesData !== undefined ? minutesData : meeting.minutes;
-  // Keep ref always current so async export handlers never read a stale closure
-  activeMinutesRef.current = activeMinutes;
 
   const handleAIEdit = async () => {
     if (!editRequest.trim() || !activeMinutes) return;
