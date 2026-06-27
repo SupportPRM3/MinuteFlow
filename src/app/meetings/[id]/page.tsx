@@ -175,7 +175,7 @@ export default function MeetingDetail({ params }: { params: Promise<{ id: string
       const pageW = 210;
       const margin = 18;
       const maxW = pageW - margin * 2;
-      const HEADER_H = 18; // mm reserved at top for branded header
+      const HEADER_H = 22; // mm reserved at top for branded header
       const FOOTER_H = 10; // mm reserved at bottom for footer
       const CONTENT_TOP = margin + HEADER_H;
       const CONTENT_BOTTOM = 297 - margin - FOOTER_H;
@@ -192,29 +192,40 @@ export default function MeetingDetail({ params }: { params: Promise<{ id: string
       let pageNum = 1;
 
       // Draw branded header on current page
+      const LOGO_W = 22; // mm — logo width
+      const LOGO_H = 14; // mm — logo height
+      const LOGO_GAP = 4; // mm between logo and text
       const drawHeader = () => {
         const hTop = margin - 2;
         // Accent bar at top
         doc.setFillColor(...accentRgb);
         doc.rect(margin, hTop, maxW, 1.2, "F");
 
+        let textX = margin;
+
         if (branding.logoBase64) {
           try {
             const ext = branding.logoBase64.split(";")[0].split("/")[1]?.toUpperCase() as "PNG" | "JPEG" | "JPG";
-            doc.addImage(branding.logoBase64, ext || "PNG", margin, hTop + 3, 0, 10);
+            // Centre logo vertically in the header zone
+            const logoY = hTop + (HEADER_H - LOGO_H) / 2;
+            doc.addImage(branding.logoBase64, ext || "PNG", margin, logoY, LOGO_W, LOGO_H);
+            textX = margin + LOGO_W + LOGO_GAP;
           } catch { /* skip broken logo */ }
         }
 
         if (company) {
+          // Vertically centre the text block (company name + tagline) in header
+          const textBlockH = branding.tagline ? 9 : 5;
+          const textStartY = hTop + (HEADER_H - textBlockH) / 2 + 4;
           doc.setFont("helvetica", "bold");
-          doc.setFontSize(11);
+          doc.setFontSize(13);
           doc.setTextColor(...accentRgb);
-          doc.text(company, branding.logoBase64 ? margin + 36 : margin, hTop + 8);
+          doc.text(company, textX, textStartY);
           if (branding.tagline) {
             doc.setFont("helvetica", "normal");
-            doc.setFontSize(7.5);
+            doc.setFontSize(8);
             doc.setTextColor(100, 116, 139);
-            doc.text(branding.tagline, branding.logoBase64 ? margin + 36 : margin, hTop + 13);
+            doc.text(branding.tagline, textX, textStartY + 5);
           }
         }
 
