@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef } from "react";
-import { User, Bell, Shield, Trash2, Save, Check, Palette, Upload, X } from "lucide-react";
+import { User, Bell, Shield, Trash2, Save, Check, Palette, Upload, X, Pipette } from "lucide-react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -233,26 +233,67 @@ export default function SettingsPage() {
               {/* Accent color */}
               <Card>
                 <CardHeader><span className="text-sm font-semibold text-slate-800">Accent Color</span></CardHeader>
-                <CardContent>
-                  <p className="text-xs text-slate-500 mb-3">Used for header bar, section titles, and highlights in exported documents.</p>
-                  <div className="flex items-center gap-3">
-                    {["#6366f1","#0ea5e9","#10b981","#f59e0b","#ef4444","#8b5cf6","#ec4899","#0f172a"].map((c) => (
+                <CardContent className="space-y-4">
+                  <p className="text-xs text-slate-500">Used for header bar, section titles, and highlights in exported documents.</p>
+
+                  {/* Preset swatches */}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {["#6366f1","#0ea5e9","#10b981","#f59e0b","#ef4444","#8b5cf6","#ec4899","#0f172a","#64748b","#0d9488","#b45309","#be123c"].map((c) => (
                       <button
                         key={c}
+                        title={c}
                         onClick={() => setBranding({ accentColor: c })}
-                        className={cn("w-8 h-8 rounded-full border-2 transition-transform hover:scale-110", branding.accentColor === c ? "border-slate-700 scale-110" : "border-transparent")}
+                        className={cn("w-8 h-8 rounded-full border-2 transition-transform hover:scale-110 shrink-0",
+                          branding.accentColor === c ? "border-slate-700 scale-110 ring-2 ring-offset-1 ring-slate-400" : "border-white shadow-sm")}
                         style={{ backgroundColor: c }}
                       />
                     ))}
-                    <div className="flex items-center gap-2 ml-2">
+                  </div>
+
+                  {/* Custom color picker row */}
+                  <div className="flex items-center gap-3">
+                    {/* Color swatch that opens the native picker */}
+                    <div className="relative group">
                       <input
+                        id="accent-color-input"
                         type="color"
                         value={branding.accentColor}
                         onChange={(e) => setBranding({ accentColor: e.target.value })}
-                        className="w-8 h-8 rounded-full border border-slate-200 cursor-pointer p-0.5 bg-white"
+                        className="absolute inset-0 opacity-0 w-full h-full cursor-pointer"
                       />
-                      <span className="text-xs text-slate-500 font-mono">{branding.accentColor}</span>
+                      <div
+                        className="w-10 h-10 rounded-xl border-2 border-slate-200 shadow-sm flex items-center justify-center cursor-pointer group-hover:scale-105 transition-transform"
+                        style={{ backgroundColor: branding.accentColor }}
+                      >
+                        <Pipette size={14} className="text-white drop-shadow" />
+                      </div>
                     </div>
+
+                    {/* Hex text input */}
+                    <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
+                      <span className="text-slate-400 text-sm font-mono">#</span>
+                      <input
+                        type="text"
+                        value={branding.accentColor.replace("#", "")}
+                        maxLength={6}
+                        onChange={(e) => {
+                          const val = e.target.value.replace(/[^0-9a-fA-F]/g, "");
+                          if (val.length === 6) setBranding({ accentColor: `#${val}` });
+                        }}
+                        className="w-20 bg-transparent text-sm font-mono text-slate-700 focus:outline-none uppercase"
+                        placeholder="6366f1"
+                      />
+                    </div>
+
+                    {/* Preview chip */}
+                    <div
+                      className="flex items-center gap-2 px-3 py-1.5 rounded-full text-white text-xs font-medium shadow-sm"
+                      style={{ backgroundColor: branding.accentColor }}
+                    >
+                      <span>Preview</span>
+                    </div>
+
+                    <p className="text-xs text-slate-400 ml-1">Click the square to open the color picker</p>
                   </div>
                 </CardContent>
               </Card>
