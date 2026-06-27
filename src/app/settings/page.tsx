@@ -15,6 +15,7 @@ export default function SettingsPage() {
   const [saved, setSaved] = useState(false);
   const { branding, setBranding } = useBrandingStore();
   const logoInputRef = useRef<HTMLInputElement>(null);
+  const colorInputRef = useRef<HTMLInputElement>(null);
   const [notifications, setNotifications] = useState({
     uploadComplete: true,
     transcriptionDone: true,
@@ -252,22 +253,23 @@ export default function SettingsPage() {
 
                   {/* Custom color picker row */}
                   <div className="flex items-center gap-3">
-                    {/* Color swatch that opens the native picker */}
-                    <div className="relative group">
-                      <input
-                        id="accent-color-input"
-                        type="color"
-                        value={branding.accentColor}
-                        onChange={(e) => setBranding({ accentColor: e.target.value })}
-                        className="absolute inset-0 opacity-0 w-full h-full cursor-pointer"
-                      />
-                      <div
-                        className="w-10 h-10 rounded-xl border-2 border-slate-200 shadow-sm flex items-center justify-center cursor-pointer group-hover:scale-105 transition-transform"
-                        style={{ backgroundColor: branding.accentColor }}
-                      >
-                        <Pipette size={14} className="text-white drop-shadow" />
-                      </div>
-                    </div>
+                    {/* Hidden native input — triggered by button ref click */}
+                    <input
+                      ref={colorInputRef}
+                      type="color"
+                      value={branding.accentColor}
+                      onChange={(e) => setBranding({ accentColor: e.target.value })}
+                      className="sr-only"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => colorInputRef.current?.click()}
+                      title="Open color picker"
+                      className="w-10 h-10 rounded-xl border-2 border-slate-200 shadow-sm flex items-center justify-center hover:scale-105 transition-transform"
+                      style={{ backgroundColor: branding.accentColor }}
+                    >
+                      <Pipette size={14} className="text-white drop-shadow" />
+                    </button>
 
                     {/* Hex text input */}
                     <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
