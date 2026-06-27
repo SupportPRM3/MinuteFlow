@@ -192,9 +192,9 @@ export default function MeetingDetail({ params }: { params: Promise<{ id: string
       let pageNum = 1;
 
       // Draw branded header on current page
-      const LOGO_W = 22; // mm — logo width
-      const LOGO_H = 14; // mm — logo height
-      const LOGO_GAP = 4; // mm between logo and text
+      const LOGO_W = 32; // mm — logo width
+      const LOGO_H = 18; // mm — logo height (fills most of the header zone)
+      const LOGO_GAP = 5; // mm between logo and text
       const drawHeader = () => {
         const hTop = margin - 2;
         // Accent bar at top
