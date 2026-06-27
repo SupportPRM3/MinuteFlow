@@ -269,7 +269,13 @@ export default function MeetingDetail({ params }: { params: Promise<{ id: string
         const lines = doc.splitTextToSize(text, maxW);
         const lineH = size * 0.37;
         for (const line of lines) {
-          if (y + lineH > CONTENT_BOTTOM) newPage();
+          if (y + lineH > CONTENT_BOTTOM) {
+            newPage();
+            // drawHeader() changes font/color — restore them for the continued paragraph
+            doc.setFontSize(size);
+            doc.setFont("helvetica", bold ? "bold" : "normal");
+            doc.setTextColor(...rgb);
+          }
           doc.text(line, margin, y);
           y += lineH + extraSpacing * 0.3;
         }
