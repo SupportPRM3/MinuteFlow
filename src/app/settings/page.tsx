@@ -1,17 +1,20 @@
 "use client";
 
-import { useState } from "react";
-import { User, Bell, Shield, Trash2, Save, Check } from "lucide-react";
+import { useState, useRef } from "react";
+import { User, Bell, Shield, Trash2, Save, Check, Palette, Upload, X } from "lucide-react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { useBrandingStore } from "@/store/branding";
 
-type Section = "profile" | "notifications" | "security" | "data";
+type Section = "profile" | "branding" | "notifications" | "security" | "data";
 
 export default function SettingsPage() {
   const [section, setSection] = useState<Section>("profile");
   const [saved, setSaved] = useState(false);
+  const { branding, setBranding } = useBrandingStore();
+  const logoInputRef = useRef<HTMLInputElement>(null);
   const [notifications, setNotifications] = useState({
     uploadComplete: true,
     transcriptionDone: true,
@@ -26,8 +29,17 @@ export default function SettingsPage() {
     setTimeout(() => setSaved(false), 2000);
   };
 
+  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => setBranding({ logoBase64: reader.result as string });
+    reader.readAsDataURL(file);
+  };
+
   const nav = [
     { key: "profile" as Section, icon: User, label: "Profile" },
+    { key: "branding" as Section, icon: Palette, label: "Branding" },
     { key: "notifications" as Section, icon: Bell, label: "Notifications" },
     { key: "security" as Section, icon: Shield, label: "Security & Privacy" },
     { key: "data" as Section, icon: Trash2, label: "Data & Storage" },
@@ -113,6 +125,141 @@ export default function SettingsPage() {
                   </Button>
                 </CardContent>
               </Card>
+            </>
+          )}
+
+          {section === "branding" && (
+            <>
+              {/* Live preview */}
+              <Card>
+                <CardHeader><span className="text-sm font-semibold text-slate-800">Document Preview</span></CardHeader>
+                <CardContent>
+                  <div className="border border-slate-200 rounded-lg overflow-hidden text-xs">
+                    {/* Header preview */}
+                    <div className="flex items-center gap-3 px-5 py-3 border-b-4" style={{ borderColor: branding.accentColor }}>
+                      {branding.logoBase64 ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={branding.logoBase64} alt="logo" className="h-8 w-auto object-contain" />
+                      ) : (
+                        <div className="w-8 h-8 rounded-md flex items-center justify-center text-white text-xs font-bold" style={{ backgroundColor: branding.accentColor }}>
+                          {(branding.companyName || "B")[0].toUpperCase()}
+                        </div>
+                      )}
+                      <div>
+                        <p className="font-bold text-slate-800" style={{ color: branding.accentColor }}>{branding.companyName || "Your Company Name"}</p>
+                        {branding.tagline && <p className="text-slate-500 text-[10px]">{branding.tagline}</p>}
+                      </div>
+                    </div>
+                    {/* Simulated content */}
+                    <div className="px-5 py-3 space-y-1 bg-white">
+                      <div className="h-2.5 bg-slate-200 rounded w-2/3" />
+                      <div className="h-2 bg-slate-100 rounded w-full" />
+                      <div className="h-2 bg-slate-100 rounded w-5/6" />
+                    </div>
+                    {/* Footer preview */}
+                    <div className="flex items-center justify-between px-5 py-2 bg-slate-50 border-t border-slate-200 text-[10px] text-slate-400">
+                      <span>{branding.footerNote || "Confidential – for internal use only"}</span>
+                      <span>{branding.website || branding.email || "your@company.com"} · Page 1</span>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Logo */}
+              <Card>
+                <CardHeader><span className="text-sm font-semibold text-slate-800">Logo</span></CardHeader>
+                <CardContent className="space-y-3">
+                  <input ref={logoInputRef} type="file" accept="image/png,image/jpeg,image/svg+xml,image/webp" className="hidden" onChange={handleLogoUpload} />
+                  {branding.logoBase64 ? (
+                    <div className="flex items-center gap-3">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={branding.logoBase64} alt="logo" className="h-14 w-auto object-contain border border-slate-200 rounded-lg p-2 bg-white" />
+                      <div className="space-y-1">
+                        <Button variant="outline" size="sm" onClick={() => logoInputRef.current?.click()}><Upload size={13} /> Replace</Button>
+                        <button onClick={() => setBranding({ logoBase64: "" })} className="flex items-center gap-1 text-xs text-red-500 hover:text-red-700 px-1"><X size={11} /> Remove</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <button onClick={() => logoInputRef.current?.click()} className="w-full border-2 border-dashed border-slate-200 rounded-xl p-6 text-center hover:border-indigo-300 hover:bg-indigo-50 transition-colors">
+                      <Upload size={20} className="mx-auto mb-2 text-slate-400" />
+                      <p className="text-sm text-slate-500 font-medium">Upload logo</p>
+                      <p className="text-xs text-slate-400 mt-0.5">PNG, JPG, SVG · Recommended 200×60px</p>
+                    </button>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Company details */}
+              <Card>
+                <CardHeader><span className="text-sm font-semibold text-slate-800">Company Details</span></CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="col-span-2">
+                      <label className="text-xs font-medium text-slate-500 mb-1 block">Company Name</label>
+                      <Input value={branding.companyName} onChange={(e) => setBranding({ companyName: e.target.value })} placeholder="Prolific Tax and Multiservice" />
+                    </div>
+                    <div className="col-span-2">
+                      <label className="text-xs font-medium text-slate-500 mb-1 block">Tagline / Subtitle</label>
+                      <Input value={branding.tagline} onChange={(e) => setBranding({ tagline: e.target.value })} placeholder="Professional Tax & Payroll Services" />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-slate-500 mb-1 block">Phone</label>
+                      <Input value={branding.phone} onChange={(e) => setBranding({ phone: e.target.value })} placeholder="+1 (555) 000-0000" />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-slate-500 mb-1 block">Email</label>
+                      <Input value={branding.email} onChange={(e) => setBranding({ email: e.target.value })} placeholder="info@company.com" />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-slate-500 mb-1 block">Website</label>
+                      <Input value={branding.website} onChange={(e) => setBranding({ website: e.target.value })} placeholder="www.company.com" />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-slate-500 mb-1 block">Address</label>
+                      <Input value={branding.address} onChange={(e) => setBranding({ address: e.target.value })} placeholder="123 Main St, City, ST 00000" />
+                    </div>
+                    <div className="col-span-2">
+                      <label className="text-xs font-medium text-slate-500 mb-1 block">Footer Note</label>
+                      <Input value={branding.footerNote} onChange={(e) => setBranding({ footerNote: e.target.value })} placeholder="Confidential – for internal use only" />
+                    </div>
+                    <div className="col-span-2">
+                      <label className="text-xs font-medium text-slate-500 mb-1 block">Prepared By</label>
+                      <Input value={branding.preparedBy} onChange={(e) => setBranding({ preparedBy: e.target.value })} placeholder="MinuteFlow AI" />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Accent color */}
+              <Card>
+                <CardHeader><span className="text-sm font-semibold text-slate-800">Accent Color</span></CardHeader>
+                <CardContent>
+                  <p className="text-xs text-slate-500 mb-3">Used for header bar, section titles, and highlights in exported documents.</p>
+                  <div className="flex items-center gap-3">
+                    {["#6366f1","#0ea5e9","#10b981","#f59e0b","#ef4444","#8b5cf6","#ec4899","#0f172a"].map((c) => (
+                      <button
+                        key={c}
+                        onClick={() => setBranding({ accentColor: c })}
+                        className={cn("w-8 h-8 rounded-full border-2 transition-transform hover:scale-110", branding.accentColor === c ? "border-slate-700 scale-110" : "border-transparent")}
+                        style={{ backgroundColor: c }}
+                      />
+                    ))}
+                    <div className="flex items-center gap-2 ml-2">
+                      <input
+                        type="color"
+                        value={branding.accentColor}
+                        onChange={(e) => setBranding({ accentColor: e.target.value })}
+                        className="w-8 h-8 rounded-full border border-slate-200 cursor-pointer p-0.5 bg-white"
+                      />
+                      <span className="text-xs text-slate-500 font-mono">{branding.accentColor}</span>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Button onClick={save}>
+                {saved ? <><Check size={14} /> Saved</> : <><Save size={14} /> Save Branding</>}
+              </Button>
             </>
           )}
 

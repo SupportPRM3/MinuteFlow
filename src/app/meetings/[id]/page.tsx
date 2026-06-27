@@ -14,6 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { useMeetingsStore } from "@/store/meetings";
+import { useBrandingStore } from "@/store/branding";
 import { formatDuration, formatTimestamp, formatDate, cn } from "@/lib/utils";
 import { ChatMessage, MeetingMinutes } from "@/lib/types";
 
@@ -29,6 +30,7 @@ const MOCK_AI_RESPONSES: Record<string, string> = {
 export default function MeetingDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const { meetings, toggleFavorite, updateTranscriptSegment, renameSpeaker, updateActionItem } = useMeetingsStore();
+  const { branding } = useBrandingStore();
   const meeting = meetings.find((m) => m.id === id);
   const [activeTab, setActiveTab] = useState<Tab>("transcript");
   const [editingSegment, setEditingSegment] = useState<string | null>(null);
@@ -139,7 +141,7 @@ export default function MeetingDetail({ params }: { params: Promise<{ id: string
       const res = await fetch("/api/export/docx", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ minutes: activeMinutes }),
+        body: JSON.stringify({ minutes: activeMinutes, branding }),
       });
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
@@ -158,74 +160,143 @@ export default function MeetingDetail({ params }: { params: Promise<{ id: string
     setExportingPdf(true);
     try {
       const { jsPDF } = await import("jspdf");
-      const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
       const pageW = 210;
-      const margin = 20;
+      const margin = 18;
       const maxW = pageW - margin * 2;
-      let y = 25;
+      const HEADER_H = 18; // mm reserved at top for branded header
+      const FOOTER_H = 10; // mm reserved at bottom for footer
+      const CONTENT_TOP = margin + HEADER_H;
+      const CONTENT_BOTTOM = 297 - margin - FOOTER_H;
 
-      const addLine = (text: string, size = 11, bold = false, color = "#0f172a") => {
+      const accent = branding.accentColor || "#6366f1";
+      const accentRgb = accent.replace("#", "").match(/.{2}/g)!.map((x) => parseInt(x, 16)) as [number, number, number];
+      const company = branding.companyName || "";
+      const contactLine = [branding.website, branding.email, branding.phone].filter(Boolean).join("  ·  ");
+      const footerNote = branding.footerNote || "Confidential – for internal use only";
+      const preparedBy = branding.preparedBy || "MinuteFlow AI";
+
+      const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+      let y = CONTENT_TOP;
+      let pageNum = 1;
+
+      // Draw branded header on current page
+      const drawHeader = () => {
+        const hTop = margin - 2;
+        // Accent bar at top
+        doc.setFillColor(...accentRgb);
+        doc.rect(margin, hTop, maxW, 1.2, "F");
+
+        if (branding.logoBase64) {
+          try {
+            const ext = branding.logoBase64.split(";")[0].split("/")[1]?.toUpperCase() as "PNG" | "JPEG" | "JPG";
+            doc.addImage(branding.logoBase64, ext || "PNG", margin, hTop + 3, 0, 10);
+          } catch { /* skip broken logo */ }
+        }
+
+        if (company) {
+          doc.setFont("helvetica", "bold");
+          doc.setFontSize(11);
+          doc.setTextColor(...accentRgb);
+          doc.text(company, branding.logoBase64 ? margin + 36 : margin, hTop + 8);
+          if (branding.tagline) {
+            doc.setFont("helvetica", "normal");
+            doc.setFontSize(7.5);
+            doc.setTextColor(100, 116, 139);
+            doc.text(branding.tagline, branding.logoBase64 ? margin + 36 : margin, hTop + 13);
+          }
+        }
+
+        // Thin rule below header
+        doc.setDrawColor(...accentRgb);
+        doc.setLineWidth(0.3);
+        doc.line(margin, hTop + HEADER_H - 1, pageW - margin, hTop + HEADER_H - 1);
+      };
+
+      // Draw branded footer on current page
+      const drawFooter = (total: number) => {
+        const fTop = 297 - margin - FOOTER_H + 2;
+        doc.setDrawColor(226, 232, 240);
+        doc.setLineWidth(0.3);
+        doc.line(margin, fTop, pageW - margin, fTop);
+
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(7);
+        doc.setTextColor(148, 163, 184);
+        doc.text(footerNote, margin, fTop + 4);
+        const right = contactLine || "";
+        const pageLabel = `Page ${pageNum} of ${total}`;
+        const combined = [right, pageLabel].filter(Boolean).join("   ·   ");
+        doc.text(combined, pageW - margin, fTop + 4, { align: "right" });
+      };
+
+      // Add a new page with header
+      const newPage = () => {
+        doc.addPage();
+        pageNum++;
+        y = CONTENT_TOP;
+        drawHeader();
+      };
+
+      // Write a text block, paginating as needed
+      const addText = (text: string, size = 10, bold = false, color = "#0f172a", extraSpacing = 1.5) => {
         doc.setFontSize(size);
         doc.setFont("helvetica", bold ? "bold" : "normal");
-        const [r, g, b] = color.match(/\w\w/g)!.map((x) => parseInt(x, 16));
-        doc.setTextColor(r, g, b);
+        const rgb = color.replace("#", "").match(/.{2}/g)!.map((x) => parseInt(x, 16)) as [number, number, number];
+        doc.setTextColor(...rgb);
         const lines = doc.splitTextToSize(text, maxW);
-        if (y + lines.length * (size * 0.4) > 275) { doc.addPage(); y = 20; }
-        doc.text(lines, margin, y);
-        y += lines.length * (size * 0.45) + 2;
+        const lineH = size * 0.37;
+        for (const line of lines) {
+          if (y + lineH > CONTENT_BOTTOM) newPage();
+          doc.text(line, margin, y);
+          y += lineH + extraSpacing * 0.3;
+        }
+        y += 1;
       };
 
       const addSection = (title: string) => {
-        y += 4;
-        doc.setDrawColor(99, 102, 241);
-        doc.setLineWidth(0.4);
+        if (y + 12 > CONTENT_BOTTOM) newPage();
+        y += 3;
+        doc.setDrawColor(...accentRgb);
+        doc.setLineWidth(0.35);
         doc.line(margin, y, pageW - margin, y);
-        y += 5;
-        addLine(title, 13, true, "#6366f1");
+        y += 4;
+        addText(title, 12, true, accent, 2);
       };
 
-      // Header
-      addLine(activeMinutes.title || "Meeting Minutes", 18, true);
-      addLine(`${activeMinutes.date}  ·  ${activeMinutes.time}  ·  ${activeMinutes.duration}`, 10, false, "#64748b");
-      addLine(`Participants: ${(activeMinutes.participants ?? []).join(", ")}`, 10, false, "#64748b");
-      y += 4;
+      // Draw page 1 header
+      drawHeader();
 
-      if (activeMinutes.objectives?.length) {
-        addSection("Objectives");
-        activeMinutes.objectives.forEach((o) => addLine(`• ${o}`, 10));
-      }
-      if (activeMinutes.agenda?.length) {
-        addSection("Agenda");
-        activeMinutes.agenda.forEach((a) => addLine(`• ${a}`, 10));
-      }
+      // Title block
+      addText(activeMinutes.title || "Meeting Minutes", 17, true, "#0f172a", 3);
+      addText(`${activeMinutes.date}  ·  ${activeMinutes.time}  ·  ${activeMinutes.duration}`, 9, false, "#64748b");
+      addText(`Participants: ${(activeMinutes.participants ?? []).join(", ")}`, 9, false, "#475569");
+      y += 3;
+
+      if (activeMinutes.objectives?.length) { addSection("Objectives"); activeMinutes.objectives.forEach((o) => addText(`• ${o}`, 10)); }
+      if (activeMinutes.agenda?.length) { addSection("Agenda"); activeMinutes.agenda.forEach((a) => addText(`• ${a}`, 10)); }
       addSection("Discussion Summary");
-      addLine(activeMinutes.discussionSummary || "", 10);
-
-      if (activeMinutes.decisions?.length) {
-        addSection("Decisions Made");
-        activeMinutes.decisions.forEach((d) => addLine(`• ${d}`, 10));
-      }
+      addText(activeMinutes.discussionSummary || "", 10);
+      if (activeMinutes.decisions?.length) { addSection("Decisions Made"); activeMinutes.decisions.forEach((d) => addText(`• ${d}`, 10)); }
       if (activeMinutes.actionItems?.length) {
         addSection("Action Items");
         activeMinutes.actionItems.forEach((item) => {
-          addLine(`• ${item.task}`, 10, true);
-          addLine(`  Assignee: ${item.assignee || "—"}  ·  Due: ${item.dueDate || "—"}  ·  Priority: ${item.priority}`, 9, false, "#64748b");
+          addText(`• ${item.task}`, 10, true);
+          addText(`  Assignee: ${item.assignee || "—"}  ·  Due: ${item.dueDate || "—"}  ·  Priority: ${item.priority}`, 8.5, false, "#64748b");
         });
       }
-      if (activeMinutes.risks?.length) {
-        addSection("Risks");
-        activeMinutes.risks.forEach((r) => addLine(`• ${r}`, 10));
+      if (activeMinutes.risks?.length) { addSection("Risks & Considerations"); activeMinutes.risks.forEach((r) => addText(`• ${r}`, 10)); }
+      if (activeMinutes.followUpItems?.length) { addSection("Follow-up Items"); activeMinutes.followUpItems.forEach((f) => addText(`• ${f}`, 10)); }
+      if (activeMinutes.nextMeeting) { addSection("Next Meeting"); addText(activeMinutes.nextMeeting, 10); }
+      y += 4;
+      addText(`Prepared by: ${preparedBy}`, 8, false, "#94a3b8");
+
+      // Stamp footers on all pages now that we know total page count
+      const total = pageNum;
+      for (let p = 1; p <= total; p++) {
+        doc.setPage(p);
+        pageNum = p;
+        drawFooter(total);
       }
-      if (activeMinutes.followUpItems?.length) {
-        addSection("Follow-up Items");
-        activeMinutes.followUpItems.forEach((f) => addLine(`• ${f}`, 10));
-      }
-      if (activeMinutes.nextMeeting) {
-        addSection("Next Meeting");
-        addLine(activeMinutes.nextMeeting, 10);
-      }
-      y += 6;
-      addLine(`Prepared by: ${activeMinutes.preparedBy || "MinuteFlow AI"}`, 9, false, "#94a3b8");
 
       doc.save(`${(activeMinutes.title || "minutes").replace(/[^a-z0-9]/gi, "-").toLowerCase()}.pdf`);
     } finally {
