@@ -29,7 +29,7 @@ const MOCK_AI_RESPONSES: Record<string, string> = {
 
 export default function MeetingDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const { meetings, toggleFavorite, updateTranscriptSegment, renameSpeaker, updateActionItem } = useMeetingsStore();
+  const { meetings, toggleFavorite, updateTranscriptSegment, renameSpeaker, updateActionItem, updateMinutes } = useMeetingsStore();
   const { branding } = useBrandingStore();
   const meeting = meetings.find((m) => m.id === id);
   const [activeTab, setActiveTab] = useState<Tab>("transcript");
@@ -133,6 +133,7 @@ export default function MeetingDetail({ params }: { params: Promise<{ id: string
       const data = await res.json();
       if (data.minutes) {
         setMinutesData(data.minutes);
+        updateMinutes(meeting.id, data.minutes); // persist to Supabase
         setEditRequest("");
       }
     } catch {

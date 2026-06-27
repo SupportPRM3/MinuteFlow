@@ -23,6 +23,7 @@ interface MeetingsState {
   updateActionItem: (meetingId: string, itemId: string, updates: Partial<ActionItem>) => void;
   addMeeting: (meeting: Meeting) => void;
   updateMeetingStatus: (id: string, status: Meeting["status"], progress?: number) => void;
+  updateMinutes: (meetingId: string, minutes: Meeting["minutes"]) => void;
   renameSpeaker: (meetingId: string, speakerId: string, newName: string) => void;
   fetchMeetings: () => Promise<void>;
 }
@@ -132,6 +133,17 @@ export const useMeetingsStore = create<MeetingsState>((set, get) => ({
   addMeeting: (meeting) => {
     set((state) => ({ meetings: [meeting, ...state.meetings] }));
     syncMeeting(meeting);
+  },
+
+  updateMinutes: (meetingId, minutes) => {
+    set((state) => {
+      const meetings = state.meetings.map((m) =>
+        m.id === meetingId ? { ...m, minutes } : m
+      );
+      const updated = meetings.find((m) => m.id === meetingId);
+      if (updated) syncMeeting(updated);
+      return { meetings };
+    });
   },
 
   updateMeetingStatus: (id, status, progress) => {
