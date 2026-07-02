@@ -133,7 +133,9 @@ export async function POST(req: NextRequest) {
         text: seg.text.trim(),
       }));
 
-      const MAX_TRANSCRIPT_CHARS = 12000;
+      // Claude Sonnet's 200K-token context window comfortably fits multi-hour transcripts —
+      // this is a safety cap for pathological inputs, not a normal-case limit.
+      const MAX_TRANSCRIPT_CHARS = 300000;
       const transcriptForAI = fullText.length > MAX_TRANSCRIPT_CHARS
         ? fullText.slice(0, MAX_TRANSCRIPT_CHARS) + "\n\n[Transcript truncated for length]"
         : fullText;
@@ -147,10 +149,12 @@ export async function POST(req: NextRequest) {
       const [call1, call2] = await Promise.all([
         anthropic.messages.create({
           model: "claude-sonnet-4-6",
-          max_tokens: 4096,
+          max_tokens: 8192,
           messages: [{
             role: "user",
             content: `You are an expert meeting assistant. Analyze this transcript and return ONLY valid JSON (no markdown, no code fences).
+
+The transcript may cover many distinct topics — make sure the action items and summaries reflect ALL of them, not just the first few discussed.
 
 TRANSCRIPT:
 ${transcriptForAI}
@@ -161,12 +165,12 @@ Return this JSON:
   "title": "Short meeting title (max 8 words)",
   "participants": ["name1","name2"],
   "summaries": {
-    "executive": "2-3 sentence executive summary",
-    "bullet": "• Key point 1\\n• Key point 2\\n• Key point 3",
-    "detailed": "2-3 paragraph summary",
+    "executive": "2-3 sentence executive summary covering the full scope of topics discussed",
+    "bullet": "• Key point 1\\n• Key point 2\\n• Key point 3 (one bullet per distinct topic — add as many bullets as there are topics, don't cap it at 3)",
+    "detailed": "One paragraph per distinct topic discussed — do not omit any topic",
     "oneSentence": "One sentence",
-    "clientFriendly": "Client-appropriate summary",
-    "management": "Management-focused summary"
+    "clientFriendly": "Client-appropriate summary covering every topic discussed",
+    "management": "Management-focused summary covering every topic discussed"
   },
   "actionItems": [{"id":"a1","task":"...","assignee":"...","dueDate":"YYYY-MM-DD or null","priority":"high|medium|low","status":"open","notes":""}]
 }
@@ -177,10 +181,12 @@ Use "Speaker 1", "Speaker 2" etc. if names are unknown.`,
         }),
         anthropic.messages.create({
           model: "claude-sonnet-4-6",
-          max_tokens: 8096,
+          max_tokens: 16000,
           messages: [{
             role: "user",
             content: `You are an expert executive assistant. Write professional meeting minutes based on this transcript.
+
+The transcript may cover many distinct topics, including brief or minor ones. It is critical that EVERY topic discussed is represented in the minutes — do not skip, merge, or drop any topic just to keep the summary short.
 
 TRANSCRIPT:
 ${transcriptForAI}
@@ -193,8 +199,8 @@ Return ONLY valid JSON (no markdown):
   "duration": "estimate from transcript length",
   "participants": ["name1"],
   "objectives": ["objective1"],
-  "agenda": ["agenda item"],
-  "discussionSummary": "Write 3-5 paragraphs as a professional executive assistant would — not a transcript copy, but a coherent narrative of what was discussed",
+  "agenda": ["one entry per distinct topic discussed — list every topic, even briefly mentioned ones, in the order they came up"],
+  "discussionSummary": "Write one clear paragraph per topic in the agenda, covering it fully — not a transcript copy, but a coherent narrative of what was discussed. The number of paragraphs should match the number of topics actually discussed; do not cap it at 3-5 if more topics were covered.",
   "decisions": ["decision made"],
   "risks": ["risk identified"],
   "followUpItems": ["follow-up item"],
