@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { formatFileSize, cn } from "@/lib/utils";
 import { useMeetingsStore } from "@/store/meetings";
 import { Meeting } from "@/lib/types";
-import { saveRecording } from "@/lib/audio-storage";
+import { uploadRecordingForProcessing } from "@/lib/audio-storage";
 import Link from "next/link";
 
 const ACCEPTED = ".mp3,.wav,.m4a,.aac,.mp4,.mov,.mpeg";
@@ -60,11 +60,19 @@ export default function UploadPage() {
     setCurrentStage("compressing");
     setStageMessage("Uploading recording…");
 
-    try {
-      const formData = new FormData();
-      formData.append("file", file);
+    const id = `upload-${Date.now()}`;
 
-      const res = await fetch("/api/transcribe", { method: "POST", body: formData });
+    try {
+      const fileUrl = await uploadRecordingForProcessing(id, file);
+
+      setProgress(15);
+      setStageMessage("Starting AI processing…");
+
+      const res = await fetch("/api/transcribe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fileUrl, filename: file.name }),
+      });
       if (!res.body) throw new Error("No response stream");
 
       const reader = res.body.getReader();
@@ -103,7 +111,6 @@ export default function UploadPage() {
 
       if (!finalData) throw new Error("Processing failed — no data received.");
 
-      const id = `upload-${Date.now()}`;
       const newMeeting: Meeting = {
         id,
         title: title || (finalData.title as string) || file.name,
@@ -124,7 +131,6 @@ export default function UploadPage() {
       };
 
       addMeeting(newMeeting);
-      await saveRecording(id, file).catch(() => {});
       setCreatedId(id);
       setDone(true);
     } catch (err) {

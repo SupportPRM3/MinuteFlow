@@ -70,21 +70,22 @@ export async function POST(req: NextRequest) {
   // Run pipeline in background and stream progress
   (async () => {
     try {
-      const formData = await req.formData();
-      const file = formData.get("file") as File;
-      if (!file) {
+      const { fileUrl, filename } = await req.json();
+      if (!fileUrl || !filename) {
         await send("error", { message: "No file provided" });
         return;
       }
 
       const tmp = tmpdir();
-      const ext = file.name.split(".").pop() ?? "m4a";
+      const ext = filename.split(".").pop() ?? "m4a";
       const inputPath = join(tmp, `mf-input-${Date.now()}.${ext}`);
       const compressedPath = join(tmp, `mf-compressed-${Date.now()}.mp3`);
       tempFiles.push(inputPath, compressedPath);
 
       await send("progress", { stage: "compressing", message: "Compressing audio…", pct: 10 });
-      const buffer = Buffer.from(await file.arrayBuffer());
+      const fileRes = await fetch(fileUrl);
+      if (!fileRes.ok) throw new Error(`Failed to download uploaded file (${fileRes.status})`);
+      const buffer = Buffer.from(await fileRes.arrayBuffer());
       await writeFile(inputPath, buffer);
       await compressAudio(inputPath, compressedPath);
 

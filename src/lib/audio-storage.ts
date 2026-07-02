@@ -2,11 +2,23 @@ import { supabase } from "./supabase";
 
 const BUCKET = "recordings";
 
-export async function saveRecording(meetingId: string, file: File): Promise<void> {
+// Uploads the file to storage (this becomes the permanently saved recording)
+// and returns a signed URL the server can download it from for processing.
+export async function uploadRecordingForProcessing(meetingId: string, file: File): Promise<string> {
   const ext = file.name.split(".").pop() ?? "m4a";
-  await supabase.storage
+  const path = `${meetingId}.${ext}`;
+
+  const { error: uploadError } = await supabase.storage
     .from(BUCKET)
-    .upload(`${meetingId}.${ext}`, file, { upsert: true, metadata: { originalName: file.name } });
+    .upload(path, file, { upsert: true, metadata: { originalName: file.name } });
+  if (uploadError) throw new Error(`Upload failed: ${uploadError.message}`);
+
+  const { data: signed, error: signError } = await supabase.storage
+    .from(BUCKET)
+    .createSignedUrl(path, 3600); // 1-hour expiry — only needs to live long enough for the server to fetch it
+  if (signError || !signed?.signedUrl) throw new Error("Could not generate a file URL for processing");
+
+  return signed.signedUrl;
 }
 
 export async function loadRecording(meetingId: string): Promise<{ url: string; name: string } | null> {
