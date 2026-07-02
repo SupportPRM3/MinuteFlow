@@ -143,18 +143,18 @@ export async function POST(req: NextRequest) {
       const today = new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
       const nowTime = new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
 
-      // Run both Claude calls in parallel — saves ~30 seconds
+      // Single Claude call covering both the analysis and the meeting minutes —
+      // avoids sending the (often large) transcript twice.
       await send("progress", { stage: "analyzing", message: "Analyzing with Claude AI…", pct: 60 });
 
-      const [call1, call2] = await Promise.all([
-        anthropic.messages.create({
-          model: "claude-sonnet-4-6",
-          max_tokens: 8192,
-          messages: [{
-            role: "user",
-            content: `You are an expert meeting assistant. Analyze this transcript and return ONLY valid JSON (no markdown, no code fences).
+      const call = await anthropic.messages.create({
+        model: "claude-sonnet-4-6",
+        max_tokens: 16000,
+        messages: [{
+          role: "user",
+          content: `You are an expert meeting assistant and executive assistant. Analyze this transcript and produce both a structured analysis and professional meeting minutes. Return ONLY valid JSON (no markdown, no code fences).
 
-The transcript may cover many distinct topics — make sure the action items and summaries reflect ALL of them, not just the first few discussed.
+The transcript may cover many distinct topics, including brief or minor ones. It is critical that EVERY topic discussed is represented — in the summaries, the minutes' agenda, and the discussion narrative — do not skip, merge, or drop any topic just to keep things short.
 
 TRANSCRIPT:
 ${transcriptForAI}
@@ -172,58 +172,38 @@ Return this JSON:
     "clientFriendly": "Client-appropriate summary covering every topic discussed",
     "management": "Management-focused summary covering every topic discussed"
   },
-  "actionItems": [{"id":"a1","task":"...","assignee":"...","dueDate":"YYYY-MM-DD or null","priority":"high|medium|low","status":"open","notes":""}]
+  "actionItems": [{"id":"a1","task":"...","assignee":"...","dueDate":"YYYY-MM-DD or null","priority":"high|medium|low","status":"open","notes":""}],
+  "minutes": {
+    "title": "Full meeting title",
+    "date": "${today}",
+    "time": "${nowTime}",
+    "duration": "estimate from transcript length",
+    "participants": ["name1"],
+    "objectives": ["objective1"],
+    "agenda": ["one entry per distinct topic discussed — list every topic, even briefly mentioned ones, in the order they came up"],
+    "discussionSummary": "Write one clear paragraph per topic in the agenda, covering it fully — not a transcript copy, but a coherent narrative of what was discussed. The number of paragraphs should match the number of topics actually discussed; do not cap it at 3-5 if more topics were covered.",
+    "decisions": ["decision made"],
+    "risks": ["risk identified"],
+    "followUpItems": ["follow-up item"],
+    "nextMeeting": null,
+    "preparedBy": "MinuteFlow AI"
+  }
 }
 
 Speaker colors (pick in order): ["#6366f1","#f59e0b","#10b981","#ef4444","#8b5cf6","#06b6d4"]
 Use "Speaker 1", "Speaker 2" etc. if names are unknown.`,
-          }],
-        }),
-        anthropic.messages.create({
-          model: "claude-sonnet-4-6",
-          max_tokens: 16000,
-          messages: [{
-            role: "user",
-            content: `You are an expert executive assistant. Write professional meeting minutes based on this transcript.
-
-The transcript may cover many distinct topics, including brief or minor ones. It is critical that EVERY topic discussed is represented in the minutes — do not skip, merge, or drop any topic just to keep the summary short.
-
-TRANSCRIPT:
-${transcriptForAI}
-
-Return ONLY valid JSON (no markdown):
-{
-  "title": "Full meeting title",
-  "date": "${today}",
-  "time": "${nowTime}",
-  "duration": "estimate from transcript length",
-  "participants": ["name1"],
-  "objectives": ["objective1"],
-  "agenda": ["one entry per distinct topic discussed — list every topic, even briefly mentioned ones, in the order they came up"],
-  "discussionSummary": "Write one clear paragraph per topic in the agenda, covering it fully — not a transcript copy, but a coherent narrative of what was discussed. The number of paragraphs should match the number of topics actually discussed; do not cap it at 3-5 if more topics were covered.",
-  "decisions": ["decision made"],
-  "risks": ["risk identified"],
-  "followUpItems": ["follow-up item"],
-  "nextMeeting": null,
-  "preparedBy": "MinuteFlow AI"
-}`,
-          }],
-        }),
-      ]);
+        }],
+      });
 
       await send("progress", { stage: "finalizing", message: "Finalizing meeting minutes…", pct: 90 });
 
-      const raw1 = call1.content[0].type === "text" ? call1.content[0].text : "";
-      const json1 = raw1.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/```\s*$/i, "").trim();
-      const ai1 = JSON.parse(json1);
+      const raw = call.content[0].type === "text" ? call.content[0].text : "";
+      const json = raw.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/```\s*$/i, "").trim();
+      const ai = JSON.parse(json);
 
-      const raw2 = call2.content[0].type === "text" ? call2.content[0].text : "";
-      const json2 = raw2.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/```\s*$/i, "").trim();
-      const ai2 = JSON.parse(json2);
+      ai.minutes.actionItems = ai.actionItems ?? [];
 
-      ai2.actionItems = ai1.actionItems ?? [];
-
-      const speakers: Array<{ id: string; name: string; color: string }> = ai1.speakers ?? [{ id: "s1", name: "Speaker 1", color: "#6366f1" }];
+      const speakers: Array<{ id: string; name: string; color: string }> = ai.speakers ?? [{ id: "s1", name: "Speaker 1", color: "#6366f1" }];
       const enrichedSegments = segments.map((seg, idx) => {
         const matchedSpeaker = speakers.find((sp) =>
           seg.text.toLowerCase().includes(sp.name.toLowerCase().split(" ")[0])
@@ -234,12 +214,12 @@ Return ONLY valid JSON (no markdown):
 
       await send("done", {
         transcript: enrichedSegments,
-        speakers: ai1.speakers ?? [{ id: "s1", name: "Speaker 1", color: "#6366f1" }],
-        title: ai1.title ?? "Untitled Meeting",
-        participants: ai1.participants ?? ["Speaker 1"],
-        summaries: ai1.summaries,
-        actionItems: ai1.actionItems ?? [],
-        minutes: ai2,
+        speakers: ai.speakers ?? [{ id: "s1", name: "Speaker 1", color: "#6366f1" }],
+        title: ai.title ?? "Untitled Meeting",
+        participants: ai.participants ?? ["Speaker 1"],
+        summaries: ai.summaries,
+        actionItems: ai.actionItems ?? [],
+        minutes: ai.minutes,
       });
     } catch (error) {
       const msg = error instanceof Error ? error.message : "Processing failed";
