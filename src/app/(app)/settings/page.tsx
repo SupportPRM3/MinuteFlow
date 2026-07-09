@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef } from "react";
 import { User, Bell, Shield, Trash2, Save, Check, Palette, Upload, X } from "lucide-react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -23,15 +23,17 @@ export default function SettingsPage() {
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
-
-  useEffect(() => {
-    if (!user) return;
+  // Adjust state during render (rather than in an effect) when the loaded user changes —
+  // see https://react.dev/learn/you-might-not-need-an-effect#adjusting-some-state-when-a-prop-changes
+  const [loadedUserId, setLoadedUserId] = useState<string | undefined>(undefined);
+  if (user && user.id !== loadedUserId) {
+    setLoadedUserId(user.id);
     const fullName = (user.user_metadata?.full_name as string | undefined) ?? "";
     const [first = "", ...rest] = fullName.split(" ");
     setFirstName(first);
     setLastName(rest.join(" "));
     setEmail(user.email ?? "");
-  }, [user]);
+  }
 
   const saveProfile = async () => {
     await supabase.auth.updateUser({
