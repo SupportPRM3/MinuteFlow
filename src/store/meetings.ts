@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { Meeting, Folder, ActionItem } from "@/lib/types";
 import { mockFolders } from "@/lib/mock-data";
 import { supabase } from "@/lib/supabase";
+import { useAuthStore } from "@/store/auth";
 
 interface MeetingsState {
   meetings: Meeting[];
@@ -29,9 +30,11 @@ interface MeetingsState {
 }
 
 async function syncMeeting(meeting: Meeting) {
+  const userId = useAuthStore.getState().user?.id;
+  if (!userId) return; // not logged in yet — nothing to scope this row to
   await supabase
     .from("meetings")
-    .upsert({ id: meeting.id, data: meeting }, { onConflict: "id" });
+    .upsert({ id: meeting.id, data: meeting, user_id: userId }, { onConflict: "id" });
 }
 
 export const useMeetingsStore = create<MeetingsState>((set, get) => ({
@@ -45,9 +48,15 @@ export const useMeetingsStore = create<MeetingsState>((set, get) => ({
   hydrated: false,
 
   fetchMeetings: async () => {
+    const userId = useAuthStore.getState().user?.id;
+    if (!userId) {
+      set({ meetings: [], hydrated: true });
+      return;
+    }
     const { data, error } = await supabase
       .from("meetings")
       .select("data")
+      .eq("user_id", userId)
       .order("created_at", { ascending: false });
     if (!error && data) {
       set({ meetings: data.map((row) => row.data as Meeting), hydrated: true });

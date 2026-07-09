@@ -9,8 +9,10 @@ import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { formatFileSize, cn } from "@/lib/utils";
 import { useMeetingsStore } from "@/store/meetings";
+import { useAuthStore } from "@/store/auth";
 import { Meeting } from "@/lib/types";
 import { uploadRecordingForProcessing } from "@/lib/audio-storage";
+import { runTranscription } from "@/lib/transcribe-client";
 import Link from "next/link";
 
 const ACCEPTED = ".mp3,.wav,.m4a,.aac,.mp4,.mov,.mpeg";
@@ -27,6 +29,7 @@ const STAGE_ORDER = ["compressing", "transcribing", "analyzing", "finalizing"];
 
 export default function UploadPage() {
   const { addMeeting } = useMeetingsStore();
+  const user = useAuthStore((s) => s.user);
   const [file, setFile] = useState<File | null>(null);
   const [title, setTitle] = useState("");
   const [dragging, setDragging] = useState(false);
@@ -53,7 +56,7 @@ export default function UploadPage() {
   }, []);
 
   const processFile = async () => {
-    if (!file) return;
+    if (!file || !user) return;
     setProcessing(true);
     setError(null);
     setProgress(5);
@@ -63,53 +66,17 @@ export default function UploadPage() {
     const id = `upload-${Date.now()}`;
 
     try {
-      const fileUrl = await uploadRecordingForProcessing(id, file);
+      const fileUrl = await uploadRecordingForProcessing(id, file, user.id);
 
       setProgress(15);
       setStageMessage("Starting AI processing…");
 
-      const res = await fetch("/api/transcribe", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ fileUrl, filename: file.name }),
+      const finalData = await runTranscription(fileUrl, file.name, (stage, message, pct) => {
+        setCurrentStage(stage);
+        setStageMessage(message);
+        setProgress(pct);
       });
-      if (!res.body) throw new Error("No response stream");
-
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-      let finalData: Record<string, unknown> | null = null;
-
-      while (true) {
-        const { done: streamDone, value } = await reader.read();
-        if (streamDone) break;
-        buffer += decoder.decode(value, { stream: true });
-
-        // Parse SSE messages — each message is separated by double newline
-        const parts = buffer.split("\n\n");
-        buffer = parts.pop() ?? "";
-
-        for (const part of parts) {
-          const eventLine = part.match(/^event: (.+)$/m)?.[1];
-          const dataLine = part.match(/^data: (.+)$/m)?.[1];
-          if (!eventLine || !dataLine) continue;
-
-          const payload = JSON.parse(dataLine);
-
-          if (eventLine === "progress") {
-            setCurrentStage(payload.stage);
-            setStageMessage(payload.message);
-            setProgress(payload.pct);
-          } else if (eventLine === "done") {
-            setProgress(100);
-            finalData = payload;
-          } else if (eventLine === "error") {
-            throw new Error(payload.message);
-          }
-        }
-      }
-
-      if (!finalData) throw new Error("Processing failed — no data received.");
+      setProgress(100);
 
       const newMeeting: Meeting = {
         id,
@@ -122,7 +89,7 @@ export default function UploadPage() {
         status: "completed",
         tags: ["uploaded"],
         isFavorite: false,
-        createdBy: "Jovit Aleria",
+        createdBy: (user.user_metadata?.full_name as string | undefined) ?? user.email ?? "Unknown",
         transcript: finalData.transcript as Meeting["transcript"],
         speakers: finalData.speakers as Meeting["speakers"],
         summaries: finalData.summaries as Meeting["summaries"],
@@ -270,7 +237,7 @@ export default function UploadPage() {
         ))}
       </div>
 
-      <Button size="lg" disabled={!file} onClick={processFile} className="w-full">
+      <Button size="lg" disabled={!file || !user} onClick={processFile} className="w-full">
         <Upload size={16} /> Process Recording with AI
       </Button>
     </div>

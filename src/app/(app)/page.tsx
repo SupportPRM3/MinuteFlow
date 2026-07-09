@@ -11,10 +11,13 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { useMeetingsStore } from "@/store/meetings";
+import { useAuthStore } from "@/store/auth";
 import { formatRelative, formatDuration } from "@/lib/utils";
 
 export default function Dashboard() {
   const { meetings } = useMeetingsStore();
+  const user = useAuthStore((s) => s.user);
+  const firstName = ((user?.user_metadata?.full_name as string | undefined) ?? user?.email ?? "").split(" ")[0];
   const completed = meetings.filter((m) => m.status === "completed");
   const processing = meetings.filter((m) => m.status !== "completed" && m.status !== "failed");
   const totalSeconds = completed.reduce((acc, m) => acc + m.duration, 0);
@@ -47,7 +50,7 @@ export default function Dashboard() {
       {/* Welcome */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-xl font-bold text-slate-800">Good morning, Jovit</h2>
+          <h2 className="text-xl font-bold text-slate-800">Good morning{firstName ? `, ${firstName}` : ""}</h2>
           <p className="text-sm text-slate-500 mt-0.5">Here&apos;s your meeting overview</p>
         </div>
         <div className="flex gap-2">

@@ -1,13 +1,16 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard, FolderOpen, Mic, Upload, Settings, Search,
-  Zap, BookOpen, Users, Bell, ChevronDown, Star, Folder
+  Zap, BookOpen, Users, Bell, ChevronDown, Star, Folder, LogOut
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useMeetingsStore } from "@/store/meetings";
+import { useAuthStore } from "@/store/auth";
+import { supabase } from "@/lib/supabase";
 
 const navItems = [
   { href: "/", icon: LayoutDashboard, label: "Dashboard" },
@@ -20,10 +23,29 @@ const navItems = [
   { href: "/settings", icon: Settings, label: "Settings" },
 ];
 
+function initialsFor(name: string) {
+  const parts = name.trim().split(/\s+/);
+  return parts.length > 1
+    ? (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+    : name.slice(0, 2).toUpperCase();
+}
+
 export function Sidebar() {
   const pathname = usePathname();
+  const router = useRouter();
   const { folders, meetings } = useMeetingsStore();
+  const user = useAuthStore((s) => s.user);
   const favorites = meetings.filter((m) => m.isFavorite);
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  const displayName = (user?.user_metadata?.full_name as string | undefined) || user?.email || "Loading…";
+  const displayEmail = user?.email ?? "";
+
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+    router.push("/login");
+    router.refresh();
+  };
 
   return (
     <aside className="flex flex-col w-64 min-h-screen bg-slate-900 border-r border-slate-800 shrink-0">
@@ -96,15 +118,33 @@ export function Sidebar() {
       </nav>
 
       {/* User */}
-      <div className="px-3 py-4 border-t border-slate-800">
-        <div className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-slate-800 cursor-pointer transition-colors">
-          <div className="w-7 h-7 rounded-full bg-indigo-500 flex items-center justify-center text-xs font-bold text-white">JA</div>
-          <div className="flex-1 min-w-0">
-            <div className="text-xs font-medium text-white truncate">Jovit Aleria</div>
-            <div className="text-xs text-slate-500 truncate">jaleria@prm3tax.com</div>
+      <div className="relative px-3 py-4 border-t border-slate-800">
+        {menuOpen && (
+          <div
+            className="absolute bottom-full left-3 right-3 mb-1 bg-slate-800 border border-slate-700 rounded-lg shadow-lg overflow-hidden"
+            onMouseLeave={() => setMenuOpen(false)}
+          >
+            <button
+              onClick={handleSignOut}
+              className="w-full flex items-center gap-2 px-3 py-2 text-xs text-slate-300 hover:bg-slate-700 hover:text-white transition-colors"
+            >
+              <LogOut size={12} /> Log out
+            </button>
+          </div>
+        )}
+        <button
+          onClick={() => setMenuOpen((v) => !v)}
+          className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-slate-800 cursor-pointer transition-colors"
+        >
+          <div className="w-7 h-7 rounded-full bg-indigo-500 flex items-center justify-center text-xs font-bold text-white shrink-0">
+            {initialsFor(displayName)}
+          </div>
+          <div className="flex-1 min-w-0 text-left">
+            <div className="text-xs font-medium text-white truncate">{displayName}</div>
+            <div className="text-xs text-slate-500 truncate">{displayEmail}</div>
           </div>
           <ChevronDown size={12} className="text-slate-500 shrink-0" />
-        </div>
+        </button>
       </div>
     </aside>
   );

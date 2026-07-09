@@ -1,12 +1,14 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { User, Bell, Shield, Trash2, Save, Check, Palette, Upload, X } from "lucide-react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { useBrandingStore } from "@/store/branding";
+import { useAuthStore } from "@/store/auth";
+import { supabase } from "@/lib/supabase";
 
 type Section = "profile" | "branding" | "notifications" | "security" | "data";
 
@@ -16,6 +18,28 @@ export default function SettingsPage() {
   const { branding, setBranding } = useBrandingStore();
   const logoInputRef = useRef<HTMLInputElement>(null);
   const [hexInput, setHexInput] = useState(branding.accentColor.replace("#", ""));
+
+  const user = useAuthStore((s) => s.user);
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [email, setEmail] = useState("");
+
+  useEffect(() => {
+    if (!user) return;
+    const fullName = (user.user_metadata?.full_name as string | undefined) ?? "";
+    const [first = "", ...rest] = fullName.split(" ");
+    setFirstName(first);
+    setLastName(rest.join(" "));
+    setEmail(user.email ?? "");
+  }, [user]);
+
+  const saveProfile = async () => {
+    await supabase.auth.updateUser({
+      email,
+      data: { full_name: `${firstName} ${lastName}`.trim() },
+    });
+    save();
+  };
   const [notifications, setNotifications] = useState({
     uploadComplete: true,
     transcriptionDone: true,
@@ -77,7 +101,9 @@ export default function SettingsPage() {
                 <CardHeader><span className="text-sm font-semibold text-slate-800">Personal Information</span></CardHeader>
                 <CardContent className="space-y-4">
                   <div className="flex items-center gap-4 pb-4 border-b border-slate-100">
-                    <div className="w-14 h-14 rounded-full bg-indigo-500 flex items-center justify-center text-xl font-bold text-white">JA</div>
+                    <div className="w-14 h-14 rounded-full bg-indigo-500 flex items-center justify-center text-xl font-bold text-white">
+                      {(firstName[0] ?? "") + (lastName[0] ?? "") || "?"}
+                    </div>
                     <div>
                       <Button variant="outline" size="sm">Change Photo</Button>
                       <p className="text-xs text-slate-400 mt-1">JPG or PNG, max 2MB</p>
@@ -86,22 +112,18 @@ export default function SettingsPage() {
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="text-xs font-medium text-slate-500 mb-1 block">First Name</label>
-                      <Input defaultValue="Jovit" />
+                      <Input value={firstName} onChange={(e) => setFirstName(e.target.value)} />
                     </div>
                     <div>
                       <label className="text-xs font-medium text-slate-500 mb-1 block">Last Name</label>
-                      <Input defaultValue="Aleria" />
+                      <Input value={lastName} onChange={(e) => setLastName(e.target.value)} />
                     </div>
                   </div>
                   <div>
                     <label className="text-xs font-medium text-slate-500 mb-1 block">Email</label>
-                    <Input defaultValue="jaleria@prm3tax.com" type="email" />
+                    <Input value={email} onChange={(e) => setEmail(e.target.value)} type="email" />
                   </div>
-                  <div>
-                    <label className="text-xs font-medium text-slate-500 mb-1 block">Organization</label>
-                    <Input defaultValue="PRM3 Tax" />
-                  </div>
-                  <Button onClick={save}>
+                  <Button onClick={saveProfile}>
                     {saved ? <><Check size={14} /> Saved</> : <><Save size={14} /> Save Changes</>}
                   </Button>
                 </CardContent>

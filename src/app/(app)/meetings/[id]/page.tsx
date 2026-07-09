@@ -14,6 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { useMeetingsStore } from "@/store/meetings";
+import { useAuthStore } from "@/store/auth";
 import { useBrandingStore } from "@/store/branding";
 import { formatDuration, formatTimestamp, formatDate, cn } from "@/lib/utils";
 import { ChatMessage, MeetingMinutes } from "@/lib/types";
@@ -31,6 +32,7 @@ export default function MeetingDetail({ params }: { params: Promise<{ id: string
   const { id } = use(params);
   const { meetings, toggleFavorite, updateTranscriptSegment, renameSpeaker, updateActionItem, updateMinutes } = useMeetingsStore();
   const { branding } = useBrandingStore();
+  const userId = useAuthStore((s) => s.user?.id);
   const meeting = meetings.find((m) => m.id === id);
   const [activeTab, setActiveTab] = useState<Tab>("transcript");
   const [editingSegment, setEditingSegment] = useState<string | null>(null);
@@ -49,14 +51,15 @@ export default function MeetingDetail({ params }: { params: Promise<{ id: string
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [audioName, setAudioName] = useState<string>("");
   useEffect(() => {
+    if (!userId) return;
     import("@/lib/audio-storage").then(({ loadRecording }) =>
-      loadRecording(id).then((r) => {
+      loadRecording(id, userId).then((r) => {
         if (r) { setAudioUrl(r.url); setAudioName(r.name); }
       }).catch(() => {})
     );
     return () => { if (audioUrl) URL.revokeObjectURL(audioUrl); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id]);
+  }, [id, userId]);
 
   // Minutes AI editing
   const [minutesData, setMinutesData] = useState<MeetingMinutes | null | undefined>(undefined);

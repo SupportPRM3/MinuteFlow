@@ -4,9 +4,10 @@ const BUCKET = "recordings";
 
 // Uploads the file to storage (this becomes the permanently saved recording)
 // and returns a signed URL the server can download it from for processing.
-export async function uploadRecordingForProcessing(meetingId: string, file: File): Promise<string> {
+// Stored under {userId}/{meetingId}.{ext} to match the per-user storage RLS policy.
+export async function uploadRecordingForProcessing(meetingId: string, file: File, userId: string): Promise<string> {
   const ext = file.name.split(".").pop() ?? "m4a";
-  const path = `${meetingId}.${ext}`;
+  const path = `${userId}/${meetingId}.${ext}`;
 
   const { error: uploadError } = await supabase.storage
     .from(BUCKET)
@@ -21,26 +22,28 @@ export async function uploadRecordingForProcessing(meetingId: string, file: File
   return signed.signedUrl;
 }
 
-export async function loadRecording(meetingId: string): Promise<{ url: string; name: string } | null> {
-  // List objects whose name starts with the meetingId
-  const { data: list } = await supabase.storage.from(BUCKET).list("", {
+export async function loadRecording(meetingId: string, userId: string): Promise<{ url: string; name: string } | null> {
+  // List objects whose name starts with the meetingId, within the user's own folder
+  const { data: list } = await supabase.storage.from(BUCKET).list(userId, {
     search: meetingId,
   });
   const obj = list?.find((o) => o.name.startsWith(meetingId));
   if (!obj) return null;
 
-  const { data } = supabase.storage.from(BUCKET).getPublicUrl(obj.name);
-  // Bucket is private — use a signed URL instead
+  const path = `${userId}/${obj.name}`;
+  // Bucket is private — use a signed URL
   const { data: signed } = await supabase.storage
     .from(BUCKET)
-    .createSignedUrl(obj.name, 3600); // 1-hour expiry
+    .createSignedUrl(path, 3600); // 1-hour expiry
 
   if (!signed?.signedUrl) return null;
   return { url: signed.signedUrl, name: obj.name };
 }
 
-export async function deleteRecording(meetingId: string): Promise<void> {
-  const { data: list } = await supabase.storage.from(BUCKET).list("", { search: meetingId });
-  const names = (list ?? []).filter((o) => o.name.startsWith(meetingId)).map((o) => o.name);
-  if (names.length) await supabase.storage.from(BUCKET).remove(names);
+export async function deleteRecording(meetingId: string, userId: string): Promise<void> {
+  const { data: list } = await supabase.storage.from(BUCKET).list(userId, { search: meetingId });
+  const paths = (list ?? [])
+    .filter((o) => o.name.startsWith(meetingId))
+    .map((o) => `${userId}/${o.name}`);
+  if (paths.length) await supabase.storage.from(BUCKET).remove(paths);
 }
