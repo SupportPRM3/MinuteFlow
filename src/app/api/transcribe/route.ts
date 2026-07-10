@@ -206,17 +206,23 @@ Use "Speaker 1", "Speaker 2" etc. if names are unknown.`,
       // The model is prompted to return these as arrays of plain strings, but occasionally
       // nests a malformed object instead — coerce here so the client never has to guard
       // against non-string children when rendering (React throws on object children).
+      const asText = (item: unknown): string => {
+        if (typeof item === "string") return item;
+        if (item && typeof item === "object") {
+          const strings = Object.values(item).filter((v) => typeof v === "string");
+          return strings.length ? strings.join(" — ") : JSON.stringify(item);
+        }
+        return String(item);
+      };
       for (const field of ["objectives", "agenda", "decisions", "risks", "followUpItems"] as const) {
         const value = ai.minutes[field];
         if (!Array.isArray(value)) continue;
-        ai.minutes[field] = value.map((item: unknown) => {
-          if (typeof item === "string") return item;
-          if (item && typeof item === "object") {
-            const strings = Object.values(item).filter((v) => typeof v === "string");
-            return strings.length ? strings.join(" — ") : JSON.stringify(item);
-          }
-          return String(item);
-        });
+        ai.minutes[field] = value.map(asText);
+      }
+      // nextMeeting is prompted as a string or null, but the model occasionally nests a
+      // structured "next meeting details" object here instead — same non-string crash risk.
+      if (ai.minutes.nextMeeting != null && typeof ai.minutes.nextMeeting !== "string") {
+        ai.minutes.nextMeeting = asText(ai.minutes.nextMeeting);
       }
 
       const speakers: Array<{ id: string; name: string; color: string }> = ai.speakers ?? [{ id: "s1", name: "Speaker 1", color: "#6366f1" }];

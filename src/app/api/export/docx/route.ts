@@ -11,6 +11,17 @@ import { BrandingSettings } from "@/store/branding";
 // Convert hex color to docx format (no #)
 function hex(color: string) { return color.replace("#", ""); }
 
+// Minutes list/text fields are normally plain strings, but AI-generated data occasionally
+// nests a malformed object instead — coerce so docx's TextRun never receives a non-string.
+function asText(value: unknown): string {
+  if (typeof value === "string") return value;
+  if (value && typeof value === "object") {
+    const strings = Object.values(value).filter((v) => typeof v === "string");
+    return strings.length ? strings.join(" — ") : JSON.stringify(value);
+  }
+  return String(value);
+}
+
 // Fetch a remote image or decode base64 to a Buffer
 async function resolveImage(src: string): Promise<Buffer | null> {
   try {
@@ -55,12 +66,12 @@ export async function POST(req: NextRequest) {
 
     const bullet = (text: string) => new Paragraph({
       bullet: { level: 0 },
-      children: [new TextRun({ text, size: 21 })],
+      children: [new TextRun({ text: asText(text), size: 21 })],
       spacing: { after: 60 },
     });
 
     const body = (text: string) => new Paragraph({
-      children: [new TextRun({ text, size: 21 })],
+      children: [new TextRun({ text: asText(text), size: 21 })],
       spacing: { after: 100 },
     });
 

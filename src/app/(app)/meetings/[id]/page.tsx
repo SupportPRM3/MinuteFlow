@@ -420,7 +420,7 @@ export default function MeetingDetail({ params }: { params: Promise<{ id: string
       }
       if (activeMinutes.nextMeeting) {
         addSection("Next Meeting");
-        addText(activeMinutes.nextMeeting, 10, false, BODY);
+        addText(asText(activeMinutes.nextMeeting), 10, false, BODY);
       }
       y += 4;
       addText(`Prepared by: ${preparedBy}`, 8, false, MUTED);
@@ -799,7 +799,7 @@ export default function MeetingDetail({ params }: { params: Promise<{ id: string
                 {activeMinutes.nextMeeting && (
                   <div>
                     <h3 className="text-base font-semibold pb-1 mb-2 border-b" style={{ color: branding.accentColor, borderColor: branding.accentColor }}>Next Meeting</h3>
-                    <p className="text-sm text-slate-700">{activeMinutes.nextMeeting}</p>
+                    <p className="text-sm text-slate-700">{asText(activeMinutes.nextMeeting)}</p>
                   </div>
                 )}
               </div>
