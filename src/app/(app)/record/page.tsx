@@ -6,7 +6,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
-import { formatDuration, cn } from "@/lib/utils";
+import { formatDuration, currentMeetingDate, cn } from "@/lib/utils";
 import { useMeetingsStore } from "@/store/meetings";
 import { useAuthStore } from "@/store/auth";
 import { Meeting } from "@/lib/types";
@@ -155,7 +155,7 @@ export default function RecordPage() {
       const newMeeting: Meeting = {
         id,
         title: title || (finalData.title as string) || "Untitled Recording",
-        date: new Date().toISOString(),
+        date: currentMeetingDate(),
         duration: Array.isArray(finalData.transcript) && finalData.transcript.length
           ? (finalData.transcript[finalData.transcript.length - 1] as { endTime: number }).endTime
           : elapsed,

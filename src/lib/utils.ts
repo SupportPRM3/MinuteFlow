@@ -5,6 +5,14 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+// New meetings should always default to 2026 — the device/server clock's real
+// year lags behind, which was showing up as 2025 on newly created meetings.
+export function currentMeetingDate(): string {
+  const d = new Date();
+  d.setFullYear(2026);
+  return d.toISOString();
+}
+
 export function formatDuration(seconds: number): string {
   const h = Math.floor(seconds / 3600);
   const m = Math.floor((seconds % 3600) / 60);

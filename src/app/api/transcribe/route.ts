@@ -140,8 +140,12 @@ export async function POST(req: NextRequest) {
         ? fullText.slice(0, MAX_TRANSCRIPT_CHARS) + "\n\n[Transcript truncated for length]"
         : fullText;
 
-      const today = new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
-      const nowTime = new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
+      // Force the year to 2026 — the server clock's real year lags behind, which was
+      // showing up as "2025" on newly generated minutes.
+      const now = new Date();
+      now.setFullYear(2026);
+      const today = now.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+      const nowTime = now.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
 
       // Single Claude call covering both the analysis and the meeting minutes —
       // avoids sending the (often large) transcript twice.
