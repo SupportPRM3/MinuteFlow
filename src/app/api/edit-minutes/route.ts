@@ -10,7 +10,9 @@ export async function POST(req: NextRequest) {
 
     const message = await anthropic.messages.create({
       model: "claude-sonnet-4-6",
-      max_tokens: 4096,
+      // Must comfortably exceed the size of a full minutes JSON — the model echoes back
+      // the entire object, not a diff, and 4096 truncated mid-string on real meetings.
+      max_tokens: 16000,
       messages: [{
         role: "user",
         content: `You are an expert executive assistant editing meeting minutes. Apply the user's requested change to the minutes JSON.

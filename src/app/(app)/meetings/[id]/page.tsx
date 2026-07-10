@@ -76,6 +76,7 @@ export default function MeetingDetail({ params }: { params: Promise<{ id: string
   const [minutesData, setMinutesData] = useState<MeetingMinutes | null | undefined>(undefined);
   const [editRequest, setEditRequest] = useState("");
   const [editLoading, setEditLoading] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
   const [showEditPanel, setShowEditPanel] = useState(false);
   const [exportingPdf, setExportingPdf] = useState(false);
   const [exportingDocx, setExportingDocx] = useState(false);
@@ -138,6 +139,7 @@ export default function MeetingDetail({ params }: { params: Promise<{ id: string
   const handleAIEdit = async () => {
     if (!editRequest.trim() || !activeMinutes) return;
     setEditLoading(true);
+    setEditError(null);
     try {
       const res = await fetch("/api/edit-minutes", {
         method: "POST",
@@ -149,9 +151,11 @@ export default function MeetingDetail({ params }: { params: Promise<{ id: string
         setMinutesData(data.minutes);
         updateMinutes(meeting.id, data.minutes); // persist to Supabase
         setEditRequest("");
+      } else {
+        setEditError(data.error || "Edit failed. Please try again.");
       }
     } catch {
-      // silently fail — user sees no change
+      setEditError("Connection error. Please try again.");
     } finally {
       setEditLoading(false);
     }
@@ -663,6 +667,7 @@ export default function MeetingDetail({ params }: { params: Promise<{ id: string
                   )}
                 </button>
               </div>
+              {editError && <p className="text-xs text-red-600">{editError}</p>}
             </div>
           )}
 
