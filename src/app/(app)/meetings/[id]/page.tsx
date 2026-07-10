@@ -21,6 +21,17 @@ import { ChatMessage, MeetingMinutes } from "@/lib/types";
 
 type Tab = "transcript" | "minutes" | "summary" | "actions" | "ai-chat";
 
+// Minutes list fields are normally plain strings, but AI-generated data occasionally
+// nests a malformed object instead — coerce so React never throws rendering a non-string child.
+function asText(value: unknown): string {
+  if (typeof value === "string") return value;
+  if (value && typeof value === "object") {
+    const strings = Object.values(value).filter((v) => typeof v === "string");
+    return strings.length ? strings.join(" — ") : JSON.stringify(value);
+  }
+  return String(value);
+}
+
 const MOCK_AI_RESPONSES: Record<string, string> = {
   default: "Based on this meeting's transcript, I can help you find specific information. Try asking about decisions made, action items assigned to someone, topics discussed, or any specific details from the conversation.",
   decisions: "**Decisions made in this meeting:**\n\n1. Maximum authorized discount for the Hartmann multi-year deal is 10%, pending a finance scenario analysis\n2. Finance analysis must be completed before any commitment is made to Hartmann\n3. Chicago office upsell discussion deferred to a subsequent meeting",
@@ -364,7 +375,7 @@ export default function MeetingDetail({ params }: { params: Promise<{ id: string
       if (activeMinutes.decisions?.length) {
         addSection("Decisions Made");
         activeMinutes.decisions.forEach((d) =>
-          addPillRow(d, "✓", [236, 253, 245], [16, 185, 129])
+          addPillRow(asText(d), "✓", [236, 253, 245], [16, 185, 129])
         );
       }
 
@@ -400,7 +411,7 @@ export default function MeetingDetail({ params }: { params: Promise<{ id: string
       if (activeMinutes.risks?.length) {
         addSection("Risks & Considerations");
         activeMinutes.risks.forEach((r) =>
-          addPillRow(r, "!", [255, 251, 235], [217, 119, 6])
+          addPillRow(asText(r), "!", [255, 251, 235], [217, 119, 6])
         );
       }
       if (activeMinutes.followUpItems?.length) {
@@ -706,7 +717,7 @@ export default function MeetingDetail({ params }: { params: Promise<{ id: string
                       {items.map((item, i) => (
                         <li key={i} className="flex items-start gap-2 text-sm text-slate-700">
                           <ChevronRight size={14} className="mt-0.5 shrink-0" style={{ color: branding.accentColor }} />
-                          {item}
+                          {asText(item)}
                         </li>
                       ))}
                     </ul>
@@ -725,7 +736,7 @@ export default function MeetingDetail({ params }: { params: Promise<{ id: string
                       {activeMinutes.decisions.map((d, i) => (
                         <li key={i} className="flex items-start gap-2 text-sm text-slate-700 bg-emerald-50 rounded-lg px-3 py-2">
                           <Check size={14} className="text-emerald-500 mt-0.5 shrink-0" />
-                          {d}
+                          {asText(d)}
                         </li>
                       ))}
                     </ul>
@@ -765,7 +776,7 @@ export default function MeetingDetail({ params }: { params: Promise<{ id: string
                     <ul className="space-y-1">
                       {activeMinutes.risks.map((r, i) => (
                         <li key={i} className="flex items-start gap-2 text-sm text-slate-700">
-                          <span className="text-amber-500 mt-0.5">⚠</span>{r}
+                          <span className="text-amber-500 mt-0.5">⚠</span>{asText(r)}
                         </li>
                       ))}
                     </ul>
@@ -778,7 +789,7 @@ export default function MeetingDetail({ params }: { params: Promise<{ id: string
                     <ul className="space-y-1">
                       {activeMinutes.followUpItems.map((f, i) => (
                         <li key={i} className="flex items-start gap-2 text-sm text-slate-700">
-                          <ChevronRight size={14} className="text-slate-400 mt-0.5 shrink-0" />{f}
+                          <ChevronRight size={14} className="text-slate-400 mt-0.5 shrink-0" />{asText(f)}
                         </li>
                       ))}
                     </ul>

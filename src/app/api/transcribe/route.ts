@@ -203,6 +203,22 @@ Use "Speaker 1", "Speaker 2" etc. if names are unknown.`,
 
       ai.minutes.actionItems = ai.actionItems ?? [];
 
+      // The model is prompted to return these as arrays of plain strings, but occasionally
+      // nests a malformed object instead — coerce here so the client never has to guard
+      // against non-string children when rendering (React throws on object children).
+      for (const field of ["objectives", "agenda", "decisions", "risks", "followUpItems"] as const) {
+        const value = ai.minutes[field];
+        if (!Array.isArray(value)) continue;
+        ai.minutes[field] = value.map((item: unknown) => {
+          if (typeof item === "string") return item;
+          if (item && typeof item === "object") {
+            const strings = Object.values(item).filter((v) => typeof v === "string");
+            return strings.length ? strings.join(" — ") : JSON.stringify(item);
+          }
+          return String(item);
+        });
+      }
+
       const speakers: Array<{ id: string; name: string; color: string }> = ai.speakers ?? [{ id: "s1", name: "Speaker 1", color: "#6366f1" }];
       const enrichedSegments = segments.map((seg, idx) => {
         const matchedSpeaker = speakers.find((sp) =>
