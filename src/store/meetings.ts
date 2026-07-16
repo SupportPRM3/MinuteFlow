@@ -139,8 +139,17 @@ export const useMeetingsStore = create<MeetingsState>((set, get) => ({
     });
   },
 
+  // Also used to checkpoint an in-progress meeting multiple times (stub after upload,
+  // updated after transcription, updated again after analysis) — upserts by id locally
+  // so re-saving the same meeting replaces it in place instead of duplicating it.
   addMeeting: (meeting) => {
-    set((state) => ({ meetings: [meeting, ...state.meetings] }));
+    set((state) => {
+      const exists = state.meetings.some((m) => m.id === meeting.id);
+      const meetings = exists
+        ? state.meetings.map((m) => (m.id === meeting.id ? meeting : m))
+        : [meeting, ...state.meetings];
+      return { meetings };
+    });
     syncMeeting(meeting);
   },
 
@@ -156,10 +165,15 @@ export const useMeetingsStore = create<MeetingsState>((set, get) => ({
   },
 
   updateMeetingStatus: (id, status, progress) => {
-    set((state) => ({
-      meetings: state.meetings.map((m) =>
+    set((state) => {
+      const meetings = state.meetings.map((m) =>
         m.id === id ? { ...m, status, processingProgress: progress ?? m.processingProgress } : m
-      ),
-    }));
+      );
+      const updated = meetings.find((m) => m.id === id);
+      // Persist status changes (e.g. "failed") so a checkpointed meeting's outcome
+      // survives even if the tab closes right after the error.
+      if (updated) syncMeeting(updated);
+      return { meetings };
+    });
   },
 }));

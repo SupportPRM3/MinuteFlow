@@ -39,9 +39,19 @@ const MOCK_AI_RESPONSES: Record<string, string> = {
   hartmann: "**Hartmann Account Discussion:**\n\nThe Hartmann account is in renewal discussions. Key points:\n- The client's CFO expressed interest in a multi-year deal\n- They are requesting a **12% discount** on years 2 and 3\n- The internal team agreed on a **maximum 10% authorization**\n- A finance scenario analysis is required before final commitment\n- Follow-up with their CFO is scheduled for Monday",
 };
 
+const STATUS_BADGE: Record<string, { label: string; variant: "success" | "warning" | "danger" | "info" }> = {
+  completed: { label: "Completed", variant: "success" },
+  uploading: { label: "Uploading…", variant: "info" },
+  transcribing: { label: "Transcribing…", variant: "info" },
+  detecting_speakers: { label: "Processing…", variant: "info" },
+  generating_summary: { label: "Needs AI Analysis", variant: "warning" },
+  creating_minutes: { label: "Processing…", variant: "info" },
+  failed: { label: "Failed", variant: "danger" },
+};
+
 export default function MeetingDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const { meetings, toggleFavorite, updateTranscriptSegment, renameSpeaker, updateActionItem, updateMinutes } = useMeetingsStore();
+  const { meetings, toggleFavorite, updateTranscriptSegment, renameSpeaker, updateActionItem, updateMinutes, addMeeting } = useMeetingsStore();
   const { branding } = useBrandingStore();
   const userId = useAuthStore((s) => s.user?.id);
   const meeting = meetings.find((m) => m.id === id);
@@ -80,6 +90,8 @@ export default function MeetingDetail({ params }: { params: Promise<{ id: string
   const [showEditPanel, setShowEditPanel] = useState(false);
   const [exportingPdf, setExportingPdf] = useState(false);
   const [exportingDocx, setExportingDocx] = useState(false);
+  const [retrying, setRetrying] = useState(false);
+  const [retryError, setRetryError] = useState<string | null>(null);
   // Ref always tracks the latest active minutes so export closures never go stale
   const activeMinutesRef = useRef<MeetingMinutes | null | undefined>(undefined);
 
@@ -158,6 +170,37 @@ export default function MeetingDetail({ params }: { params: Promise<{ id: string
       setEditError("Connection error. Please try again.");
     } finally {
       setEditLoading(false);
+    }
+  };
+
+  // Retries just the AI-analysis step against the transcript already saved for this
+  // meeting — used when a meeting was checkpointed after transcription but analysis
+  // failed (or was never run), so the user doesn't have to re-upload/re-transcribe.
+  const handleRetryAnalysis = async () => {
+    if (!meeting || !meeting.transcript?.length) return;
+    setRetrying(true);
+    setRetryError(null);
+    try {
+      const res = await fetch("/api/analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ transcript: meeting.transcript }),
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) throw new Error(data.error || "Analysis failed. Please try again.");
+      addMeeting({
+        ...meeting,
+        status: "completed",
+        transcript: data.transcript,
+        speakers: data.speakers,
+        summaries: data.summaries,
+        actionItems: data.actionItems,
+        minutes: data.minutes,
+      });
+    } catch (err) {
+      setRetryError(err instanceof Error ? err.message : "Analysis failed. Please try again.");
+    } finally {
+      setRetrying(false);
     }
   };
 
@@ -471,7 +514,9 @@ export default function MeetingDetail({ params }: { params: Promise<{ id: string
             <button onClick={() => toggleFavorite(meeting.id)}>
               <Star size={16} className={meeting.isFavorite ? "fill-amber-400 text-amber-400" : "text-slate-300 hover:text-amber-400"} />
             </button>
-            <Badge variant="success">Completed</Badge>
+            <Badge variant={(STATUS_BADGE[meeting.status] ?? STATUS_BADGE.completed).variant}>
+              {(STATUS_BADGE[meeting.status] ?? STATUS_BADGE.completed).label}
+            </Badge>
           </div>
           <div className="flex items-center gap-4 flex-wrap">
             <span className="text-xs text-slate-400 flex items-center gap-1"><Calendar size={10} />{formatDate(meeting.date)}</span>
@@ -490,6 +535,26 @@ export default function MeetingDetail({ params }: { params: Promise<{ id: string
         {meeting.tags.map((tag) => <Badge key={tag} variant="outline">{tag}</Badge>)}
         {meeting.team && <Badge variant="default">{meeting.team}</Badge>}
       </div>
+
+      {/* Incomplete processing banner — offers a retry when a transcript was
+          checkpointed but AI analysis hasn't finished (or failed) yet. */}
+      {meeting.status !== "completed" && (
+        <div className="mb-5 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 flex items-center justify-between gap-3 flex-wrap">
+          <p className="text-sm text-amber-800">
+            {meeting.transcript?.length
+              ? "The transcript was saved, but AI analysis hasn't completed for this meeting yet."
+              : "This meeting hasn't finished processing yet."}
+          </p>
+          {!!meeting.transcript?.length && (
+            <Button size="sm" onClick={handleRetryAnalysis} disabled={retrying}>
+              {retrying ? <><Loader2 size={13} className="animate-spin" /> Analyzing…</> : <><Wand2 size={13} /> Run AI Analysis</>}
+            </Button>
+          )}
+        </div>
+      )}
+      {retryError && (
+        <div className="mb-5 -mt-3 text-sm text-red-600">{retryError}</div>
+      )}
 
       {/* Audio Player */}
       {audioUrl && (

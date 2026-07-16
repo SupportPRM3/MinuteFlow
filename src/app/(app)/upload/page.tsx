@@ -28,7 +28,7 @@ const STAGE_LABELS: Record<string, string> = {
 const STAGE_ORDER = ["compressing", "transcribing", "analyzing", "finalizing"];
 
 export default function UploadPage() {
-  const { addMeeting } = useMeetingsStore();
+  const { addMeeting, updateMeetingStatus } = useMeetingsStore();
   const user = useAuthStore((s) => s.user);
   const [file, setFile] = useState<File | null>(null);
   const [title, setTitle] = useState("");
@@ -40,6 +40,10 @@ export default function UploadPage() {
   const [done, setDone] = useState(false);
   const [createdId, setCreatedId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Tracks whether a checkpoint (upload / transcript) was already saved for the in-flight
+  // meeting, so a failure can tell the user what's recoverable instead of a dead-end error.
+  const [savedId, setSavedId] = useState<string | null>(null);
+  const [transcriptSaved, setTranscriptSaved] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const handleFile = (f: File) => {
@@ -59,37 +63,73 @@ export default function UploadPage() {
     if (!file || !user) return;
     setProcessing(true);
     setError(null);
+    setSavedId(null);
+    setTranscriptSaved(false);
     setProgress(5);
     setCurrentStage("compressing");
     setStageMessage("Uploading recording…");
 
     const id = `upload-${Date.now()}`;
+    // Plain locals (not state) — state set earlier in this same async call isn't
+    // visible to reads later in the call until after a render, so the catch block
+    // below can't rely on the `savedId`/`transcriptSaved` state for its decision.
+    let uploadSaved = false;
+    let transcriptSavedLocal = false;
+    const createdBy = (user.user_metadata?.full_name as string | undefined) ?? user.email ?? "Unknown";
+    const baseMeeting: Meeting = {
+      id,
+      title: title || file.name,
+      date: currentMeetingDate(),
+      duration: 0,
+      participants: ["Speaker 1"],
+      status: "transcribing",
+      tags: ["uploaded"],
+      isFavorite: false,
+      createdBy,
+      transcript: [],
+      actionItems: [],
+    };
 
     try {
       const fileUrl = await uploadRecordingForProcessing(id, file, user.id);
 
+      // Checkpoint 1: the recording itself is uploaded and safe in storage — save a
+      // stub record now so nothing is lost if transcription or analysis fails next.
+      addMeeting(baseMeeting);
+      uploadSaved = true;
+      setSavedId(id);
+
       setProgress(15);
       setStageMessage("Starting AI processing…");
 
-      const finalData = await runTranscription(fileUrl, file.name, (stage, message, pct) => {
-        setCurrentStage(stage);
-        setStageMessage(message);
-        setProgress(pct);
-      });
+      const finalData = await runTranscription(
+        fileUrl,
+        file.name,
+        (stage, message, pct) => {
+          setCurrentStage(stage);
+          setStageMessage(message);
+          setProgress(pct);
+        },
+        (transcript) => {
+          // Checkpoint 2: transcription finished — save it immediately so it survives
+          // even if the AI analysis step below fails.
+          const segments = transcript as unknown as Meeting["transcript"];
+          const duration = segments && segments.length ? segments[segments.length - 1].endTime : 0;
+          addMeeting({ ...baseMeeting, status: "generating_summary", transcript: segments, duration });
+          transcriptSavedLocal = true;
+          setTranscriptSaved(true);
+        }
+      );
       setProgress(100);
 
       const newMeeting: Meeting = {
-        id,
+        ...baseMeeting,
         title: title || (finalData.title as string) || file.name,
-        date: currentMeetingDate(),
         duration: Array.isArray(finalData.transcript) && finalData.transcript.length
           ? (finalData.transcript[finalData.transcript.length - 1] as { endTime: number }).endTime
           : 3600,
         participants: (finalData.participants as string[]) ?? ["Speaker 1"],
         status: "completed",
-        tags: ["uploaded"],
-        isFavorite: false,
-        createdBy: (user.user_metadata?.full_name as string | undefined) ?? user.email ?? "Unknown",
         transcript: finalData.transcript as Meeting["transcript"],
         speakers: finalData.speakers as Meeting["speakers"],
         summaries: finalData.summaries as Meeting["summaries"],
@@ -97,10 +137,16 @@ export default function UploadPage() {
         minutes: finalData.minutes as Meeting["minutes"],
       };
 
+      // Checkpoint 3: full analysis done — final save.
       addMeeting(newMeeting);
       setCreatedId(id);
       setDone(true);
     } catch (err) {
+      if (uploadSaved || transcriptSavedLocal) {
+        // Something was already checkpointed (recording and/or transcript) — mark the
+        // saved record as failed rather than leaving it stuck on "transcribing" forever.
+        updateMeetingStatus(id, "failed");
+      }
       setError(err instanceof Error ? err.message : "Processing failed. Please try again.");
       setProcessing(false);
       setCurrentStage("");
@@ -228,7 +274,19 @@ export default function UploadPage() {
       )}
 
       {error && (
-        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-600">{error}</div>
+        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-600">
+          <p>{error}</p>
+          {savedId && (
+            <p className="mt-1.5 text-red-500">
+              {transcriptSaved
+                ? "Good news: the transcript was already saved before this failed. "
+                : "Good news: the recording was already saved before this failed. "}
+              <Link href={`/meetings/${savedId}`} className="underline font-medium hover:text-red-700">
+                View it{transcriptSaved ? " and retry AI analysis" : ""}
+              </Link>
+            </p>
+          )}
+        </div>
       )}
 
       <div className="flex flex-wrap gap-2 mb-6">
