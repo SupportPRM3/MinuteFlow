@@ -9,9 +9,12 @@ create table if not exists meetings (
 );
 
 -- Audio recordings bucket
-insert into storage.buckets (id, name, public)
-values ('recordings', 'recordings', false)
-on conflict (id) do nothing;
+-- file_size_limit is in bytes; 524288000 = 500MB, comfortably above what
+-- browsers can realistically record/export. Without this the bucket falls
+-- back to Supabase's default 50MB cap, which real meeting recordings exceed.
+insert into storage.buckets (id, name, public, file_size_limit)
+values ('recordings', 'recordings', false, 524288000)
+on conflict (id) do update set file_size_limit = 524288000;
 
 -- ── Multi-user migration ────────────────────────────────────────────────
 -- Wipes existing placeholder data (there was no real auth before this, so
