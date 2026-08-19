@@ -110,24 +110,29 @@ export async function POST(req: NextRequest) {
         await mkdir(chunkDir, { recursive: true });
         tempDirs.push(chunkDir);
         const chunkPaths = await splitAudio(compressedPath, chunkDir, 1200);
+        tempFiles.push(...chunkPaths);
 
-        let timeOffset = 0;
-        for (let i = 0; i < chunkPaths.length; i++) {
-          await send("progress", {
-            stage: "transcribing",
-            message: `Transcribing part ${i + 1} of ${chunkPaths.length}…`,
-            pct: 30 + Math.round((i / chunkPaths.length) * 25),
-          });
-          const result = await transcribeFile(chunkPaths[i], `chunk-${i}.mp3`);
+        // Transcribe chunks concurrently rather than one at a time — sequential Whisper
+        // calls on a multi-chunk recording can push total request time past Vercel's
+        // maxDuration, killing the connection before a "done" event is ever sent.
+        await send("progress", {
+          stage: "transcribing",
+          message: `Transcribing ${chunkPaths.length} parts…`,
+          pct: 40,
+        });
+        const chunkResults = await Promise.all(
+          chunkPaths.map((path, i) => transcribeFile(path, `chunk-${i}.mp3`))
+        );
+        chunkResults.forEach((result, i) => {
+          // Chunks are split at exact 1200s boundaries, so each chunk's start offset
+          // is simply its index times the chunk duration — no need for the previous
+          // chunk's actual (sequential) result to compute it.
+          const timeOffset = i * 1200;
           for (const seg of result.segments) {
             allSegments.push({ start: seg.start + timeOffset, end: seg.end + timeOffset, text: seg.text });
           }
           fullText += (fullText ? " " : "") + result.text;
-          timeOffset += result.segments.length > 0
-            ? result.segments[result.segments.length - 1].end
-            : 1200;
-          tempFiles.push(chunkPaths[i]);
-        }
+        });
       }
 
       const segments = allSegments.map((seg, i) => ({
